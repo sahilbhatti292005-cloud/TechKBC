@@ -1,0 +1,183 @@
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence, Reorder } from 'motion/react';
+import { GameState } from '../types';
+import { CheckCircle, Clock, Send, Vote } from 'lucide-react';
+
+interface VolunteerProps {
+  gameState: GameState | null;
+  socket: any;
+  teamId: string;
+}
+
+const Volunteer: React.FC<VolunteerProps> = ({ gameState, socket, teamId }) => {
+  const [selection, setSelection] = useState<number[]>([]);
+  const [submitted, setSubmitted] = useState(false);
+  const [voted, setVoted] = useState(false);
+
+  useEffect(() => {
+    if (socket?.readyState === 1) { // 1 is OPEN
+      const teamName = localStorage.getItem('kbc_teamName') || 'Unknown Team';
+      socket.send(JSON.stringify({ type: 'VOLUNTEER_JOIN', teamId, teamName }));
+    }
+  }, [socket, teamId]);
+
+  useEffect(() => {
+    if (gameState?.status === 'FFF_QUESTION') {
+      setSubmitted(false);
+      setSelection([]);
+    }
+    if (gameState?.status === 'CROWD_SOURCE') {
+      setVoted(false);
+    }
+  }, [gameState?.status]);
+
+  const handleSelect = (index: number) => {
+    if (selection.includes(index)) return;
+    const newSelection = [...selection, index];
+    setSelection(newSelection);
+
+    if (newSelection.length === 4) {
+      socket?.send(JSON.stringify({ type: 'VOLUNTEER_SUBMISSION', teamId, submission: newSelection }));
+      setSubmitted(true);
+    }
+  };
+
+  const handleVote = (option: string) => {
+    socket?.send(JSON.stringify({ type: 'VOTE', teamId, option }));
+    setVoted(true);
+  };
+
+  if (!gameState) return <div className="p-8">Connecting...</div>;
+
+  return (
+    <div className="min-h-screen bg-[#0a0a2a] text-white p-6 flex flex-col">
+      <header className="flex justify-between items-center mb-8">
+        <div>
+          <h1 className="text-xl font-bold">Volunteer Mode</h1>
+          <p className="text-xs text-gray-400 uppercase tracking-widest">Team ID: {teamId}</p>
+        </div>
+        <div className="bg-blue-600/20 px-3 py-1 rounded-full border border-blue-500/50 text-[10px] font-bold text-blue-400">
+          LIVE
+        </div>
+      </header>
+
+      <AnimatePresence mode="wait">
+        {gameState.status === 'LOBBY' && (
+          <motion.div 
+            key="lobby"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="flex-1 flex flex-col items-center justify-center text-center space-y-4"
+          >
+            <Clock className="w-16 h-16 text-blue-500 opacity-50 animate-pulse" />
+            <h2 className="text-2xl font-bold">Waiting for Admin...</h2>
+            <p className="text-gray-400 text-sm">The game will start shortly. Please keep this screen open.</p>
+          </motion.div>
+        )}
+
+        {(gameState.status === 'FFF_QUESTION' || gameState.status === 'FFF_OPTIONS') && (
+          <motion.div 
+            key="fff"
+            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+            className="flex-1 flex flex-col"
+          >
+            <h2 className="text-xl font-bold mb-6">{gameState.currentQuestion?.text}</h2>
+            
+            {gameState.status === 'FFF_OPTIONS' && !submitted ? (
+              <div className="flex-1 flex flex-col">
+                <p className="text-xs text-blue-400 uppercase tracking-widest mb-4">Tap options in the correct order</p>
+                <div className="grid grid-cols-1 gap-3">
+                  {gameState.currentQuestion?.options.map((opt, i) => {
+                    const orderIndex = selection.indexOf(i);
+                    return (
+                      <button 
+                        key={i} 
+                        onClick={() => handleSelect(i)}
+                        disabled={orderIndex !== -1}
+                        className={`p-4 rounded-xl border flex items-center justify-between transition-all ${
+                          orderIndex !== -1 
+                            ? 'bg-blue-600/20 border-blue-500 text-blue-300 opacity-50' 
+                            : 'bg-[#1a1a4a] border-white/10 hover:border-blue-500'
+                        }`}
+                      >
+                        <span className="font-bold">{opt}</span>
+                        {orderIndex !== -1 && (
+                          <span className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center font-black">
+                            {orderIndex + 1}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+                
+                {selection.length > 0 && (
+                  <button 
+                    onClick={() => setSelection([])}
+                    className="mt-4 text-xs text-gray-400 underline"
+                  >
+                    Reset Selection
+                  </button>
+                )}
+              </div>
+            ) : submitted ? (
+              <div className="flex-1 flex flex-col items-center justify-center text-center space-y-4">
+                <CheckCircle className="w-20 h-20 text-green-500" />
+                <h2 className="text-2xl font-bold">Answer Submitted!</h2>
+                <p className="text-gray-400">Please wait for the results on the main screen.</p>
+              </div>
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center text-center space-y-4 opacity-50">
+                <Clock className="w-12 h-12 text-blue-400 animate-spin-slow" />
+                <p className="text-gray-400">Admin is reading the question...</p>
+              </div>
+            )}
+          </motion.div>
+        )}
+
+        {gameState.status === 'CROWD_SOURCE' && (
+          <motion.div 
+            key="crowd_source"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="flex-1 flex flex-col"
+          >
+            <h2 className="text-2xl font-bold mb-8 flex items-center"><Vote className="mr-3 text-blue-400" /> Audience Poll</h2>
+            {!voted ? (
+              <div className="grid grid-cols-1 gap-4">
+                {['A', 'B', 'C', 'D'].map((opt) => (
+                  <button 
+                    key={opt}
+                    onClick={() => handleVote(opt)}
+                    className="bg-[#1a1a4a] hover:bg-blue-600/20 p-6 rounded-2xl border border-white/10 text-left flex items-center space-x-4 transition-colors"
+                  >
+                    <span className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center font-black text-xl">{opt}</span>
+                    <span className="text-lg font-bold">Option {opt}</span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center text-center space-y-4">
+                <CheckCircle className="w-20 h-20 text-green-500" />
+                <h2 className="text-2xl font-bold">Vote Cast!</h2>
+                <p className="text-gray-400">Your vote has been recorded. Watch the screen for results.</p>
+              </div>
+            )}
+          </motion.div>
+        )}
+
+        {['HOT_SEAT', 'FFF_RESULT'].includes(gameState.status) && (
+          <motion.div 
+            key="locked"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="flex-1 flex flex-col items-center justify-center text-center space-y-4 opacity-50"
+          >
+            <Lock className="w-16 h-16 text-gray-500" />
+            <h2 className="text-xl font-bold">Interface Locked</h2>
+            <p className="text-gray-400 text-sm">Gameplay is currently in progress on the main screen.</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+export default Volunteer;
