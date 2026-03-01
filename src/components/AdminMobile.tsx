@@ -1,17 +1,34 @@
 import React, { useState } from 'react';
 import { GameState } from '../types';
-import { Plus, Minus, UserCheck, Trophy, Zap } from 'lucide-react';
+import { UserCheck } from 'lucide-react';
+import { db } from '../lib/firebase';
+import { ref, update } from 'firebase/database';
 
 interface AdminMobileProps {
   gameState: GameState | null;
-  socket: any;
 }
 
-const AdminMobile: React.FC<AdminMobileProps> = ({ gameState, socket }) => {
+const AdminMobile: React.FC<AdminMobileProps> = ({ gameState }) => {
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
 
-  const sendAction = (action: string, payload: any = {}) => {
-    socket?.send(JSON.stringify({ type: 'ADMIN_ACTION', action, payload }));
+  const sendAction = async (action: string, payload: any = {}) => {
+    if (!gameState) return;
+    const gameRef = ref(db, 'gameState');
+
+    switch (action) {
+      case 'LOCK_OPTION':
+        await update(gameRef, { lockedOption: payload.optionIndex });
+        break;
+      case 'UPDATE_SCORE':
+        const team = gameState.teams.find(t => t.id === payload.teamId);
+        if (team) {
+          const updates: any = {};
+          if (payload.type === 'hotSeat') updates.hotSeatPoints = (team.hotSeatPoints || 0) + payload.amount;
+          if (payload.type === 'bonus') updates.bonusPoints = (team.bonusPoints || 0) + payload.amount;
+          await update(ref(db, `gameState/teams/${payload.teamId}`), updates);
+        }
+        break;
+    }
   };
 
   const updateScore = (amount: number, type: 'hotSeat' | 'bonus' = 'hotSeat') => {
@@ -19,7 +36,12 @@ const AdminMobile: React.FC<AdminMobileProps> = ({ gameState, socket }) => {
     sendAction('UPDATE_SCORE', { teamId: selectedTeamId, amount, type });
   };
 
-  if (!gameState) return <div className="p-4">Connecting...</div>;
+  if (!gameState) return (
+    <div className="p-8 text-center space-y-4 text-white">
+      <div className="text-blue-400 animate-pulse font-bold">Connecting to Firebase...</div>
+      <p className="text-xs text-gray-500">If this persists, the Admin may need to initialize the game.</p>
+    </div>
+  );
 
   const selectedTeam = gameState.teams.find(t => t.id === selectedTeamId);
 

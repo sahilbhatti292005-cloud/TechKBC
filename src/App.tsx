@@ -1,19 +1,68 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { GameState, Role, Team } from './types';
+import { GameState, Role } from './types';
 import AdminLaptop from './components/AdminLaptop';
 import AdminMobile from './components/AdminMobile';
 import Volunteer from './components/Volunteer';
 import Display from './components/Display';
-import { Trophy, Users, Monitor, ShieldCheck } from 'lucide-react';
+import { Users, Monitor, ShieldCheck } from 'lucide-react';
+import { db } from './lib/firebase';
+import { ref, onValue, set, get } from 'firebase/database';
 
 const App: React.FC = () => {
   const [role, setRole] = useState<Role | null>(localStorage.getItem('kbc_role') as Role | null);
   const [teamId, setTeamId] = useState<string | null>(localStorage.getItem('kbc_teamId'));
   const [teamName, setTeamName] = useState<string>(localStorage.getItem('kbc_teamName') || '');
   const [gameState, setGameState] = useState<GameState | null>(null);
-  const [socket, setSocket] = useState<any>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem('kbc_teamId'));
+
+  useEffect(() => {
+    const gameRef = ref(db, 'gameState');
+    const unsubscribe = onValue(gameRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const teamsArray = data.teams ? Object.values(data.teams) : [];
+        setGameState({ ...data, teams: teamsArray });
+      } else {
+        setGameState(null);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (role === 'admin_laptop' || role === 'admin_mobile') {
+      if (teamId === 'admin' && teamName === 'admin') {
+        localStorage.setItem('kbc_teamId', teamId);
+        localStorage.setItem('kbc_teamName', teamName);
+        localStorage.setItem('kbc_role', role);
+        setIsLoggedIn(true);
+      } else {
+        alert('Invalid Admin Credentials');
+      }
+    } else if (role === 'volunteer') {
+      if (teamId && teamName) {
+        // Register team in Firebase if not exists
+        const teamRef = ref(db, `gameState/teams/${teamId}`);
+        const snapshot = await get(teamRef);
+        if (!snapshot.exists()) {
+          await set(teamRef, {
+            id: teamId,
+            name: teamName,
+            initialPoints: 40,
+            hotSeatPoints: 0,
+            bonusPoints: 0,
+            isCorrect: 0
+          });
+        }
+        localStorage.setItem('kbc_teamId', teamId);
+        localStorage.setItem('kbc_teamName', teamName);
+        localStorage.setItem('kbc_role', role);
+        setIsLoggedIn(true);
+      }
+    }
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('kbc_teamId');
@@ -23,47 +72,6 @@ const App: React.FC = () => {
     setTeamName('');
     setRole(null);
     setIsLoggedIn(false);
-  };
-
-  const connectWebSocket = useCallback(() => {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new globalThis.WebSocket(`${protocol}//${window.location.host}`);
-
-    ws.onopen = () => console.log('WebSocket Connected');
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.type === 'SYNC') {
-        setGameState(data.state);
-      }
-    };
-    ws.onclose = () => {
-      console.log('WebSocket Disconnected, retrying...');
-      setTimeout(connectWebSocket, 3000);
-    };
-
-    setSocket(ws);
-  }, []);
-
-  useEffect(() => {
-    connectWebSocket();
-  }, [connectWebSocket]);
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const response = await fetch('/api/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ teamId, teamName, role })
-    });
-    const data = await response.json();
-    if (data.success) {
-      if (teamId) localStorage.setItem('kbc_teamId', teamId);
-      if (teamName) localStorage.setItem('kbc_teamName', teamName);
-      if (role) localStorage.setItem('kbc_role', role);
-      setIsLoggedIn(true);
-    } else {
-      alert('Invalid credentials');
-    }
   };
 
   if (!role) {
@@ -166,13 +174,13 @@ const App: React.FC = () => {
         LOGOUT / RESET
       </button>
       {role === 'admin_laptop' && (
-        <AdminLaptop gameState={gameState} socket={socket} />
+        <AdminLaptop gameState={gameState} />
       )}
       {role === 'admin_mobile' && (
-        <AdminMobile gameState={gameState} socket={socket} />
+        <AdminMobile gameState={gameState} />
       )}
       {role === 'volunteer' && (
-        <Volunteer gameState={gameState} socket={socket} teamId={teamId!} />
+        <Volunteer gameState={gameState} teamId={teamId!} />
       )}
     </div>
   );

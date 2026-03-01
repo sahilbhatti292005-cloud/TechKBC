@@ -23,7 +23,13 @@ const Display: React.FC<DisplayProps> = ({ gameState }) => {
     }
   }, [gameState?.timer]);
 
-  if (!gameState) return <div className="min-h-screen bg-[#0a0a2a] flex items-center justify-center text-white">Loading...</div>;
+  if (!gameState) return (
+    <div className="min-h-screen bg-[#0a0a2a] flex flex-col items-center justify-center text-white space-y-4">
+      <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+      <div className="text-xl font-bold">Waiting for Game to Initialize...</div>
+      <p className="text-gray-400 text-sm">The Admin needs to setup the game database.</p>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-[#0a0a2a] text-white p-8 font-sans overflow-hidden">

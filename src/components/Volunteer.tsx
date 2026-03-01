@@ -1,25 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence, Reorder } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { GameState } from '../types';
-import { CheckCircle, Clock, Send, Vote } from 'lucide-react';
+import { CheckCircle, Clock, Vote, Lock } from 'lucide-react';
+import { db } from '../lib/firebase';
+import { ref, set, increment, update } from 'firebase/database';
 
 interface VolunteerProps {
   gameState: GameState | null;
-  socket: any;
   teamId: string;
 }
 
-const Volunteer: React.FC<VolunteerProps> = ({ gameState, socket, teamId }) => {
+const Volunteer: React.FC<VolunteerProps> = ({ gameState, teamId }) => {
   const [selection, setSelection] = useState<number[]>([]);
   const [submitted, setSubmitted] = useState(false);
   const [voted, setVoted] = useState(false);
 
   useEffect(() => {
-    if (socket?.readyState === 1) { // 1 is OPEN
-      const teamName = localStorage.getItem('kbc_teamName') || 'Unknown Team';
-      socket.send(JSON.stringify({ type: 'VOLUNTEER_JOIN', teamId, teamName }));
-    }
-  }, [socket, teamId]);
+    // Team registration is handled in App.tsx login
+  }, [teamId]);
 
   useEffect(() => {
     if (gameState?.status === 'FFF_QUESTION') {
@@ -31,23 +29,37 @@ const Volunteer: React.FC<VolunteerProps> = ({ gameState, socket, teamId }) => {
     }
   }, [gameState?.status]);
 
-  const handleSelect = (index: number) => {
+  const handleSelect = async (index: number) => {
     if (selection.includes(index)) return;
     const newSelection = [...selection, index];
     setSelection(newSelection);
 
     if (newSelection.length === 4) {
-      socket?.send(JSON.stringify({ type: 'VOLUNTEER_SUBMISSION', teamId, submission: newSelection }));
+      const timeTaken = Date.now() - (gameState?.timer.start || 0);
+      await set(ref(db, `gameState/fffSubmissions/${teamId}`), {
+        teamId,
+        submission: newSelection,
+        timeTaken
+      });
       setSubmitted(true);
     }
   };
 
-  const handleVote = (option: string) => {
-    socket?.send(JSON.stringify({ type: 'VOTE', teamId, option }));
+  const handleVote = async (option: string) => {
+    const voteRef = ref(db, `gameState/crowdSourceVotes/${option}`);
+    await update(ref(db, 'gameState/crowdSourceVotes'), {
+      [option]: increment(1)
+    });
     setVoted(true);
   };
 
-  if (!gameState) return <div className="p-8">Connecting...</div>;
+  if (!gameState) return (
+    <div className="min-h-screen bg-[#0a0a2a] flex flex-col items-center justify-center text-white p-8 space-y-4">
+      <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+      <div className="text-xl font-bold">Connecting to Game...</div>
+      <p className="text-gray-400 text-sm text-center">Waiting for the Admin to start the session.</p>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-[#0a0a2a] text-white p-6 flex flex-col">
@@ -181,3 +193,4 @@ const Volunteer: React.FC<VolunteerProps> = ({ gameState, socket, teamId }) => {
 };
 
 export default Volunteer;
+

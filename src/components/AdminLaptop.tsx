@@ -1,25 +1,158 @@
 import React, { useState } from 'react';
-import { GameState, Question } from '../types';
+import { GameState } from '../types';
 import { FFF_QUESTIONS, HOT_SEAT_QUESTIONS } from '../constants';
-import { Play, Eye, Lock, Trophy, UserCheck, RefreshCw, CheckCircle, XCircle, Zap, Users } from 'lucide-react';
+import { Play, Eye, Lock, Trophy, UserCheck, RefreshCw, CheckCircle, XCircle, Zap } from 'lucide-react';
+import { db } from '../lib/firebase';
+import { ref, update, set, remove } from 'firebase/database';
 
 interface AdminLaptopProps {
   gameState: GameState | null;
-  socket: any;
 }
 
-const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState, socket }) => {
+const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
   const [selectedDifficulty, setSelectedDifficulty] = useState<'easy' | 'medium' | 'hard'>('easy');
   const [questionIndex, setQuestionIndex] = useState(0);
 
-  const sendAction = (action: string, payload: any = {}) => {
-    socket?.send(JSON.stringify({ type: 'ADMIN_ACTION', action, payload }));
+  const sendAction = async (action: string, payload: any = {}) => {
+    const gameRef = ref(db, 'gameState');
+
+    switch (action) {
+      case 'START_FFF':
+        if (!gameState) return;
+        await update(gameRef, {
+          status: 'FFF_QUESTION',
+          currentQuestion: payload.question,
+          fffSubmissions: null,
+          lockedOption: null,
+          revealCorrect: false
+        });
+        // Reset team FFF stats
+        gameState.teams.forEach(async (t) => {
+          await update(ref(db, `gameState/teams/${t.id}`), { isCorrect: 0, fffTime: null });
+        });
+        break;
+      case 'SHOW_FFF_OPTIONS':
+        await update(gameRef, {
+          status: 'FFF_OPTIONS',
+          timer: { start: Date.now(), duration: 15000, active: true }
+        });
+        break;
+      case 'LOCK_FFF':
+        await update(gameRef, {
+          status: 'FFF_RESULT',
+          'timer/active': false
+        });
+        // Calculate results (this is usually done on server, but here we do it on admin client)
+        calculateFFFResults();
+        break;
+      case 'SEND_TO_HOT_SEAT':
+        await update(gameRef, {
+          status: 'HOT_SEAT',
+          hotSeatTeamId: payload.teamId,
+          lifelines: { debugHelp: false, callDev: false, crowdSource: false },
+          lockedOption: null,
+          revealCorrect: false
+        });
+        break;
+      case 'START_HOT_SEAT_QUESTION':
+        await update(gameRef, {
+          status: 'HOT_SEAT',
+          currentQuestion: payload.question,
+          timer: { 
+            start: Date.now(), 
+            duration: payload.question.difficulty === 'easy' ? 30000 : payload.question.difficulty === 'medium' ? 45000 : 60000, 
+            active: true 
+          },
+          lockedOption: null,
+          revealCorrect: false
+        });
+        break;
+      case 'LOCK_OPTION':
+        await update(gameRef, { lockedOption: payload.optionIndex });
+        break;
+      case 'REVEAL_CORRECT':
+        await update(gameRef, {
+          revealCorrect: true,
+          'timer/active': false
+        });
+        break;
+      case 'UPDATE_SCORE':
+        const team = gameState.teams.find(t => t.id === payload.teamId);
+        if (team) {
+          const updates: any = {};
+          if (payload.type === 'hotSeat') updates.hotSeatPoints = (team.hotSeatPoints || 0) + payload.amount;
+          if (payload.type === 'bonus') updates.bonusPoints = (team.bonusPoints || 0) + payload.amount;
+          await update(ref(db, `gameState/teams/${payload.teamId}`), updates);
+        }
+        break;
+      case 'ACTIVATE_LIFELINE':
+        await set(ref(db, `gameState/lifelines/${payload.lifeline}`), true);
+        if (payload.lifeline === 'crowdSource') {
+          await update(gameRef, {
+            status: 'CROWD_SOURCE',
+            crowdSourceVotes: { A: 0, B: 0, C: 0, D: 0 },
+            timer: { start: Date.now(), duration: 15000, active: true }
+          });
+        }
+        break;
+      case 'RESET_GAME':
+        await set(gameRef, {
+          status: 'LOBBY',
+          currentCycle: 1,
+          teams: null,
+          currentQuestion: null,
+          hotSeatTeamId: null,
+          lifelines: { debugHelp: false, callDev: false, crowdSource: false },
+          lockedOption: null,
+          revealCorrect: false,
+          timer: { start: 0, duration: 0, active: false }
+        });
+        break;
+      case 'NEXT_CYCLE':
+        await update(gameRef, {
+          currentCycle: (gameState.currentCycle || 1) + 1,
+          status: 'LOBBY'
+        });
+        break;
+      case 'REFRESH_TEAMS':
+        // Not really needed for Firebase as it's real-time
+        break;
+    }
+  };
+
+  const calculateFFFResults = () => {
+    if (!gameState || !gameState.currentQuestion) return;
+    const correctOrder = gameState.currentQuestion.correctOrder;
+    const submissions = gameState.fffSubmissions ? Object.values(gameState.fffSubmissions) : [];
+    
+    submissions.forEach(async (sub: any) => {
+      const isCorrect = JSON.stringify(sub.submission) === JSON.stringify(correctOrder);
+      await update(ref(db, `gameState/teams/${sub.teamId}`), {
+        isCorrect: isCorrect ? 1 : 0,
+        fffTime: sub.timeTaken
+      });
+    });
   };
 
   const currentHotSeatQuestion = HOT_SEAT_QUESTIONS[selectedDifficulty][questionIndex % HOT_SEAT_QUESTIONS[selectedDifficulty].length];
   const currentFFFQuestion = FFF_QUESTIONS[questionIndex % FFF_QUESTIONS.length];
 
-  if (!gameState) return <div className="p-8">Connecting to server...</div>;
+  if (!gameState) {
+    return (
+      <div className="min-h-screen bg-[#0a0a2a] text-white flex flex-col items-center justify-center p-8 space-y-6">
+        <div className="text-center space-y-2">
+          <h1 className="text-3xl font-bold">Database Initializing...</h1>
+          <p className="text-gray-400">If this is your first time, click the button below to setup the game.</p>
+        </div>
+        <button 
+          onClick={() => sendAction('RESET_GAME')}
+          className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-2xl font-bold flex items-center shadow-lg shadow-blue-500/20 transition-all"
+        >
+          <RefreshCw className="w-5 h-5 mr-2" /> INITIALIZE GAME DATABASE
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8">
