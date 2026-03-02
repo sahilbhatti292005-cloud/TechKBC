@@ -12,16 +12,19 @@ const Display: React.FC<DisplayProps> = ({ gameState }) => {
   const [timeLeft, setTimeLeft] = useState(0);
 
   useEffect(() => {
-    if (gameState?.timer.active) {
+    if (gameState?.timer.isRunning) {
       const interval = setInterval(() => {
-        const elapsed = Date.now() - gameState.timer.start;
-        const remaining = Math.max(0, gameState.timer.duration - elapsed);
+        const remaining = Math.max(0, (gameState.timer.endTime || 0) - Date.now());
         setTimeLeft(Math.ceil(remaining / 1000));
         if (remaining === 0) clearInterval(interval);
       }, 100);
       return () => clearInterval(interval);
+    } else if (gameState?.timer.isPaused) {
+      setTimeLeft(Math.ceil(gameState.timer.remainingTime / 1000));
+    } else {
+      setTimeLeft(0);
     }
-  }, [gameState?.timer]);
+  }, [gameState?.timer.isRunning, gameState?.timer.isPaused, gameState?.timer.endTime, gameState?.timer.remainingTime]);
 
   if (!gameState) return (
     <div className="min-h-screen bg-[#0a0a2a] flex flex-col items-center justify-center text-white space-y-4">
@@ -34,7 +37,7 @@ const Display: React.FC<DisplayProps> = ({ gameState }) => {
   return (
     <div className="min-h-screen bg-[#0a0a2a] text-white p-8 font-sans overflow-hidden">
       <AnimatePresence mode="wait">
-        {gameState.status === 'LOBBY' && (
+        {gameState.phase === 'LOBBY' && (
           <motion.div 
             key="lobby"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -43,9 +46,9 @@ const Display: React.FC<DisplayProps> = ({ gameState }) => {
             <h1 className="text-6xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-600">
               COGNOS TAV TECH KBC
             </h1>
-            <div className="text-2xl font-mono text-blue-300">CYCLE {gameState.currentCycle} / 8</div>
+            <div className="text-2xl font-mono text-blue-300">CYCLE {gameState.cycle} / 8</div>
             <div className="grid grid-cols-4 gap-4 w-full max-w-4xl">
-              {gameState.teams.map((team, i) => (
+              {(gameState.teams || []).map((team, i) => (
                 <div key={team.id} className="bg-[#1a1a4a] p-4 rounded-xl border border-white/10 text-center">
                   <div className="text-xs text-gray-400 mb-1">TEAM {i + 1}</div>
                   <div className="font-bold truncate">{team.name}</div>
@@ -55,7 +58,7 @@ const Display: React.FC<DisplayProps> = ({ gameState }) => {
           </motion.div>
         )}
 
-        {(gameState.status === 'FFF_QUESTION' || gameState.status === 'FFF_OPTIONS') && (
+        {(gameState.phase === 'FFF_QUESTION' || gameState.phase === 'FFF_OPTIONS') && (
           <motion.div 
             key="fff"
             initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
@@ -64,7 +67,7 @@ const Display: React.FC<DisplayProps> = ({ gameState }) => {
             <div className="text-blue-400 text-sm uppercase tracking-widest mb-4">Fastest Finger First</div>
             <h2 className="text-4xl font-bold text-center mb-12 max-w-4xl">{gameState.currentQuestion?.text}</h2>
             
-            {gameState.status === 'FFF_OPTIONS' && (
+            {gameState.phase === 'FFF_OPTIONS' && (
               <div className="grid grid-cols-2 gap-6 w-full max-w-4xl">
                 {gameState.currentQuestion?.options.map((opt, i) => (
                   <div key={i} className="bg-[#1a1a4a] p-6 rounded-2xl border-2 border-blue-500/30 flex items-center space-x-4">
@@ -75,7 +78,7 @@ const Display: React.FC<DisplayProps> = ({ gameState }) => {
               </div>
             )}
 
-            {gameState.timer.active && (
+            {gameState.timer.type === 'FFF' && (
               <div className="mt-12 relative w-32 h-32 flex items-center justify-center">
                 <svg className="w-full h-full -rotate-90">
                   <circle 
@@ -98,7 +101,7 @@ const Display: React.FC<DisplayProps> = ({ gameState }) => {
           </motion.div>
         )}
 
-        {gameState.status === 'FFF_RESULT' && (
+        {gameState.phase === 'FFF_RESULT' && (
           <motion.div 
             key="fff_result"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -116,7 +119,7 @@ const Display: React.FC<DisplayProps> = ({ gameState }) => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {gameState.teams
+                  {(gameState.teams || [])
                     .filter(t => t.fffTime !== undefined)
                     .sort((a, b) => (a.fffTime || 0) - (b.fffTime || 0))
                     .map((team, i) => (
@@ -139,7 +142,7 @@ const Display: React.FC<DisplayProps> = ({ gameState }) => {
           </motion.div>
         )}
 
-        {gameState.status === 'HOT_SEAT' && (
+        {gameState.phase === 'HOT_SEAT' && (
           <motion.div 
             key="hot_seat"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -162,6 +165,24 @@ const Display: React.FC<DisplayProps> = ({ gameState }) => {
             </div>
 
             <div className="bg-[#1a1a4a] p-12 rounded-3xl border-2 border-blue-500/30 w-full max-w-5xl relative">
+              {gameState.timer.type === 'HOT_SEAT' && (
+                <div className="absolute -top-16 left-1/2 -translate-x-1/2">
+                  <div className="relative w-24 h-24 flex items-center justify-center">
+                    <svg className="w-full h-full -rotate-90">
+                      <circle cx="48" cy="48" r="44" fill="transparent" stroke="rgba(255,255,255,0.1)" strokeWidth="4" />
+                      <motion.circle 
+                        cx="48" cy="48" r="44" fill="transparent" stroke={timeLeft <= 10 ? "#ef4444" : "#3b82f6"} strokeWidth="4" 
+                        strokeDasharray="276"
+                        animate={{ strokeDashoffset: 276 - (276 * (timeLeft / (gameState.timer.duration / 1000))) }}
+                        transition={{ duration: 1, ease: "linear" }}
+                      />
+                    </svg>
+                    <div className={`absolute text-2xl font-mono font-bold ${timeLeft <= 10 ? 'text-red-500 animate-pulse' : ''}`}>
+                      {timeLeft}
+                    </div>
+                  </div>
+                </div>
+              )}
               <h2 className="text-4xl font-bold text-center mb-12">{gameState.currentQuestion?.text}</h2>
               <div className="grid grid-cols-2 gap-6">
                 {gameState.currentQuestion?.options.map((opt, i) => {
@@ -212,7 +233,7 @@ const Display: React.FC<DisplayProps> = ({ gameState }) => {
           </motion.div>
         )}
 
-        {gameState.status === 'CROWD_SOURCE' && (
+        {gameState.phase === 'CROWD_SOURCE' && (
           <motion.div 
             key="crowd_source"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -249,13 +270,13 @@ const Display: React.FC<DisplayProps> = ({ gameState }) => {
       </AnimatePresence>
 
       {/* Persistent Leaderboard at the bottom during certain states */}
-      {['LOBBY', 'GAME_OVER', 'FFF_RESULT', 'HOT_SEAT'].includes(gameState.status) && (
+      {['LOBBY', 'GAME_OVER', 'FFF_RESULT', 'HOT_SEAT'].includes(gameState.phase) && (
         <div className="fixed bottom-8 left-8 right-8">
           <div className="bg-[#1a1a4a]/80 backdrop-blur-xl p-6 rounded-3xl border border-white/10">
             <h3 className="text-xl font-bold mb-4 flex items-center"><Trophy className="mr-2 text-yellow-500" /> Live Leaderboard</h3>
             <div className="grid grid-cols-5 gap-4">
-              {gameState.teams
-                .sort((a, b) => (40 + (b.hotSeatPoints as number) + (b.bonusPoints as number)) - (40 + (a.hotSeatPoints as number) + (a.bonusPoints as number)))
+              {(gameState.teams || [])
+                .sort((a, b) => (40 + ((b.hotSeatPoints as number) || 0) + ((b.bonusPoints as number) || 0)) - (40 + ((a.hotSeatPoints as number) || 0) + ((a.bonusPoints as number) || 0)))
                 .slice(0, 5)
                 .map((team, i) => (
                   <div key={team.id} className="bg-[#0a0a2a] p-3 rounded-xl border border-white/5 flex items-center justify-between">
@@ -263,7 +284,7 @@ const Display: React.FC<DisplayProps> = ({ gameState }) => {
                       <span className="text-xs font-mono text-gray-500">#{i + 1}</span>
                       <span className="font-bold truncate max-w-[150px]">{team.name}</span>
                     </div>
-                    <span className="font-mono text-blue-400">{40 + (team.hotSeatPoints as number) + (team.bonusPoints as number)}</span>
+                    <span className="font-mono text-blue-400">{40 + ((team.hotSeatPoints as number) || 0) + ((team.bonusPoints as number) || 0)}</span>
                   </div>
                 ))}
             </div>

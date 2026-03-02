@@ -38,6 +38,7 @@ const AdminMobile: React.FC<AdminMobileProps> = ({ gameState }) => {
 
   if (!gameState) return (
     <div className="p-8 text-center space-y-4 text-white">
+      <div className="text-blue-400 animate-pulse font-bold text-xl uppercase tracking-widest">Cognos Tech KBC</div>
       <div className="text-blue-400 animate-pulse font-bold">Connecting to Firebase...</div>
       <p className="text-xs text-gray-500">If this persists, the Admin may need to initialize the game.</p>
     </div>
@@ -49,7 +50,7 @@ const AdminMobile: React.FC<AdminMobileProps> = ({ gameState }) => {
     <div className="p-4 bg-[#0a0a2a] min-h-screen text-white space-y-6">
       <header className="flex justify-between items-center">
         <h1 className="text-xl font-bold">Score Control</h1>
-        <div className="text-xs font-mono text-blue-400 uppercase tracking-widest">Admin Mobile</div>
+        <div className="text-xs font-mono text-blue-400 uppercase tracking-widest">Cycle {gameState.cycle}</div>
       </header>
 
       {/* Team Selection */}
@@ -66,7 +67,7 @@ const AdminMobile: React.FC<AdminMobileProps> = ({ gameState }) => {
           )}
         </div>
         <div className="grid grid-cols-2 gap-2">
-          {gameState.teams.map(team => (
+          {(gameState.teams || []).map(team => (
             <button 
               key={team.id}
               onClick={() => setSelectedTeamId(team.id)}
@@ -83,7 +84,7 @@ const AdminMobile: React.FC<AdminMobileProps> = ({ gameState }) => {
           <div className="bg-[#1a1a4a] p-6 rounded-2xl border border-white/10 text-center">
             <div className="text-xs text-gray-400 uppercase mb-1">Current Score for {selectedTeam.name}</div>
             <div className="text-5xl font-mono font-black text-yellow-500">
-              {40 + (selectedTeam.hotSeatPoints as number) + (selectedTeam.bonusPoints as number)}
+              {40 + ((selectedTeam.hotSeatPoints as number) || 0) + ((selectedTeam.bonusPoints as number) || 0)}
             </div>
           </div>
 

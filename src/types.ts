@@ -1,4 +1,4 @@
-export type GameStatus = 
+export type GamePhase = 
   | 'LOBBY' 
   | 'FFF_QUESTION' 
   | 'FFF_OPTIONS' 
@@ -26,12 +26,25 @@ export interface Question {
   difficulty?: 'easy' | 'medium' | 'hard';
 }
 
+export interface TimerState {
+  duration: number;
+  startTime: number | null;
+  endTime: number | null;
+  remainingTime: number;
+  isRunning: boolean;
+  isPaused: boolean;
+  type: 'FFF' | 'HOT_SEAT' | null;
+}
+
 export interface GameState {
-  status: GameStatus;
-  currentCycle: number;
+  phase: GamePhase;
+  cycle: number;
+  hotSeatTeamId: string | null;
+  currentQuestionId: string | null;
+  timer: TimerState;
+  // Keep these for UI sync
   teams: Team[];
   currentQuestion: Question | null;
-  hotSeatTeamId: string | null;
   lifelines: {
     debugHelp: boolean;
     callDev: boolean;
@@ -40,11 +53,7 @@ export interface GameState {
   lockedOption: number | null;
   revealCorrect: boolean;
   crowdSourceVotes: Record<string, number>;
-  timer: {
-    start: number;
-    duration: number;
-    active: boolean;
-  };
+  fffSubmissions?: Record<string, any>;
 }
 
 export type Role = 'admin_laptop' | 'admin_mobile' | 'volunteer' | 'display';

@@ -14,20 +14,34 @@ const Volunteer: React.FC<VolunteerProps> = ({ gameState, teamId }) => {
   const [selection, setSelection] = useState<number[]>([]);
   const [submitted, setSubmitted] = useState(false);
   const [voted, setVoted] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(0);
+
+  useEffect(() => {
+    if (gameState?.timer.isRunning && gameState.timer.type === 'FFF') {
+      const interval = setInterval(() => {
+        const remaining = Math.max(0, (gameState.timer.endTime || 0) - Date.now());
+        setTimeLeft(Math.ceil(remaining / 1000));
+        if (remaining === 0) clearInterval(interval);
+      }, 100);
+      return () => clearInterval(interval);
+    } else {
+      setTimeLeft(0);
+    }
+  }, [gameState?.timer.isRunning, gameState?.timer.endTime, gameState?.timer.type]);
 
   useEffect(() => {
     // Team registration is handled in App.tsx login
   }, [teamId]);
 
   useEffect(() => {
-    if (gameState?.status === 'FFF_QUESTION') {
+    if (gameState?.phase === 'FFF_QUESTION') {
       setSubmitted(false);
       setSelection([]);
     }
-    if (gameState?.status === 'CROWD_SOURCE') {
+    if (gameState?.phase === 'CROWD_SOURCE') {
       setVoted(false);
     }
-  }, [gameState?.status]);
+  }, [gameState?.phase]);
 
   const handleSelect = async (index: number) => {
     if (selection.includes(index)) return;
@@ -35,7 +49,7 @@ const Volunteer: React.FC<VolunteerProps> = ({ gameState, teamId }) => {
     setSelection(newSelection);
 
     if (newSelection.length === 4) {
-      const timeTaken = Date.now() - (gameState?.timer.start || 0);
+      const timeTaken = Date.now() - (gameState?.timer.startTime || Date.now());
       await set(ref(db, `gameState/fffSubmissions/${teamId}`), {
         teamId,
         submission: newSelection,
@@ -46,7 +60,6 @@ const Volunteer: React.FC<VolunteerProps> = ({ gameState, teamId }) => {
   };
 
   const handleVote = async (option: string) => {
-    const voteRef = ref(db, `gameState/crowdSourceVotes/${option}`);
     await update(ref(db, 'gameState/crowdSourceVotes'), {
       [option]: increment(1)
     });
@@ -56,6 +69,7 @@ const Volunteer: React.FC<VolunteerProps> = ({ gameState, teamId }) => {
   if (!gameState) return (
     <div className="min-h-screen bg-[#0a0a2a] flex flex-col items-center justify-center text-white p-8 space-y-4">
       <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+      <div className="text-xl font-bold uppercase tracking-widest">Cognos Tech KBC</div>
       <div className="text-xl font-bold">Connecting to Game...</div>
       <p className="text-gray-400 text-sm text-center">Waiting for the Admin to start the session.</p>
     </div>
@@ -66,15 +80,15 @@ const Volunteer: React.FC<VolunteerProps> = ({ gameState, teamId }) => {
       <header className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-xl font-bold">Volunteer Mode</h1>
-          <p className="text-xs text-gray-400 uppercase tracking-widest">Team ID: {teamId}</p>
+          <p className="text-xs text-gray-400 uppercase tracking-widest">Team: {localStorage.getItem('kbc_teamName')}</p>
         </div>
         <div className="bg-blue-600/20 px-3 py-1 rounded-full border border-blue-500/50 text-[10px] font-bold text-blue-400">
-          LIVE
+          CYCLE {gameState.cycle}
         </div>
       </header>
 
       <AnimatePresence mode="wait">
-        {gameState.status === 'LOBBY' && (
+        {gameState.phase === 'LOBBY' && (
           <motion.div 
             key="lobby"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -86,7 +100,7 @@ const Volunteer: React.FC<VolunteerProps> = ({ gameState, teamId }) => {
           </motion.div>
         )}
 
-        {(gameState.status === 'FFF_QUESTION' || gameState.status === 'FFF_OPTIONS') && (
+        {(gameState.phase === 'FFF_QUESTION' || gameState.phase === 'FFF_OPTIONS') && (
           <motion.div 
             key="fff"
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
@@ -94,9 +108,14 @@ const Volunteer: React.FC<VolunteerProps> = ({ gameState, teamId }) => {
           >
             <h2 className="text-xl font-bold mb-6">{gameState.currentQuestion?.text}</h2>
             
-            {gameState.status === 'FFF_OPTIONS' && !submitted ? (
+            {gameState.phase === 'FFF_OPTIONS' && !submitted ? (
               <div className="flex-1 flex flex-col">
-                <p className="text-xs text-blue-400 uppercase tracking-widest mb-4">Tap options in the correct order</p>
+                <div className="flex justify-between items-center mb-4">
+                  <p className="text-xs text-blue-400 uppercase tracking-widest">Tap options in the correct order</p>
+                  <div className={`text-xl font-mono font-bold ${timeLeft <= 5 ? 'text-red-500 animate-pulse' : 'text-blue-400'}`}>
+                    {timeLeft}s
+                  </div>
+                </div>
                 <div className="grid grid-cols-1 gap-3">
                   {gameState.currentQuestion?.options.map((opt, i) => {
                     const orderIndex = selection.indexOf(i);
@@ -104,10 +123,12 @@ const Volunteer: React.FC<VolunteerProps> = ({ gameState, teamId }) => {
                       <button 
                         key={i} 
                         onClick={() => handleSelect(i)}
-                        disabled={orderIndex !== -1}
+                        disabled={orderIndex !== -1 || timeLeft === 0}
                         className={`p-4 rounded-xl border flex items-center justify-between transition-all ${
                           orderIndex !== -1 
                             ? 'bg-blue-600/20 border-blue-500 text-blue-300 opacity-50' 
+                            : timeLeft === 0
+                            ? 'bg-gray-800 border-gray-700 text-gray-500 cursor-not-allowed'
                             : 'bg-[#1a1a4a] border-white/10 hover:border-blue-500'
                         }`}
                       >
@@ -146,7 +167,7 @@ const Volunteer: React.FC<VolunteerProps> = ({ gameState, teamId }) => {
           </motion.div>
         )}
 
-        {gameState.status === 'CROWD_SOURCE' && (
+        {gameState.phase === 'CROWD_SOURCE' && (
           <motion.div 
             key="crowd_source"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -176,7 +197,7 @@ const Volunteer: React.FC<VolunteerProps> = ({ gameState, teamId }) => {
           </motion.div>
         )}
 
-        {['HOT_SEAT', 'FFF_RESULT'].includes(gameState.status) && (
+        {['HOT_SEAT', 'FFF_RESULT'].includes(gameState.phase) && (
           <motion.div 
             key="locked"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
