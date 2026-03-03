@@ -41,7 +41,8 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
           currentQuestionId: payload.question.id,
           fffSubmissions: null,
           lockedOption: null,
-          revealCorrect: false
+          revealCorrect: false,
+          showBottomLeaderboard: true
         });
         // Reset team FFF stats
         (gameState.teams || []).forEach(async (t) => {
@@ -64,6 +65,7 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
       case 'LOCK_FFF':
         await update(gameRef, {
           phase: 'FFF_RESULT',
+          showBottomLeaderboard: false,
           'timer/isRunning': false,
           'timer/isPaused': false,
           'timer/startTime': null,
@@ -72,6 +74,11 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
           'timer/type': null
         });
         calculateFFFResults();
+        break;
+      case 'SHOW_LEADERBOARD':
+        await update(gameRef, {
+          showBottomLeaderboard: false
+        });
         break;
       case 'SEND_TO_HOT_SEAT':
         await update(gameRef, {
@@ -90,7 +97,7 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
         break;
       case 'START_HOT_SEAT_QUESTION':
         await update(gameRef, {
-          phase: 'HOT_SEAT',
+          phase: 'HOT_SEAT_QUESTION',
           currentQuestion: payload.question,
           currentQuestionId: payload.question.id,
           lockedOption: null,
@@ -101,6 +108,20 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
           'timer/endTime': null,
           'timer/remainingTime': 0,
           'timer/type': null
+        });
+        break;
+      case 'SHOW_HOT_SEAT_OPTIONS':
+        if (!gameState) return;
+        const hsDuration = selectedDifficulty === 'easy' ? 30000 : selectedDifficulty === 'medium' ? 45000 : 60000;
+        await update(gameRef, {
+          phase: 'HOT_SEAT_OPTIONS',
+          'timer/duration': hsDuration,
+          'timer/startTime': Date.now(),
+          'timer/endTime': Date.now() + hsDuration,
+          'timer/remainingTime': hsDuration,
+          'timer/isRunning': true,
+          'timer/isPaused': false,
+          'timer/type': 'HOT_SEAT'
         });
         break;
       case 'START_TIMER':
@@ -128,6 +149,7 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
       case 'RESUME_TIMER':
         if (!gameState || !gameState.timer.isPaused) return;
         await update(gameRef, {
+          activeLifeline: null,
           'timer/isRunning': true,
           'timer/isPaused': false,
           'timer/startTime': Date.now(),
@@ -168,19 +190,38 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
         }
         break;
       case 'ACTIVATE_LIFELINE':
-        await set(ref(db, `gameState/lifelines/${payload.lifeline}`), true);
-        if (payload.lifeline === 'crowdSource') {
-          const crowdDuration = 15000;
+        if (!gameState) return;
+        const lifeline = payload.lifeline;
+        const isAlreadyActive = gameState.activeLifeline === lifeline;
+        
+        if (isAlreadyActive) {
+          // Deactivate and resume
           await update(gameRef, {
-            phase: 'CROWD_SOURCE',
-            crowdSourceVotes: { A: 0, B: 0, C: 0, D: 0 },
-            'timer/duration': crowdDuration,
-            'timer/startTime': Date.now(),
-            'timer/endTime': Date.now() + crowdDuration,
-            'timer/remainingTime': crowdDuration,
+            activeLifeline: null,
             'timer/isRunning': true,
             'timer/isPaused': false,
-            'timer/type': 'HOT_SEAT'
+            'timer/startTime': Date.now(),
+            'timer/endTime': Date.now() + gameState.timer.remainingTime
+          });
+        } else {
+          // Activate and pause
+          const deduction = lifeline === 'debugHelp' ? -20 : lifeline === 'callDev' ? -10 : -5;
+          const team = (gameState.teams || []).find(t => t.id === gameState.hotSeatTeamId);
+          
+          if (team) {
+            await update(ref(db, `gameState/teams/${gameState.hotSeatTeamId}`), {
+              hotSeatPoints: (team.hotSeatPoints || 0) + deduction
+            });
+          }
+
+          const remaining = gameState.timer.isRunning ? Math.max(0, (gameState.timer.endTime || 0) - Date.now()) : gameState.timer.remainingTime;
+
+          await update(gameRef, {
+            activeLifeline: lifeline,
+            [`lifelines/${lifeline}`]: true,
+            'timer/isRunning': false,
+            'timer/isPaused': true,
+            'timer/remainingTime': remaining
           });
         }
         break;
@@ -193,6 +234,8 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
           currentQuestionId: null,
           hotSeatTeamId: null,
           lifelines: { debugHelp: false, callDev: false, crowdSource: false },
+          activeLifeline: null,
+          showBottomLeaderboard: true,
           lockedOption: null,
           revealCorrect: false,
           timer: {
@@ -209,7 +252,15 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
       case 'NEXT_CYCLE':
         await update(gameRef, {
           cycle: (gameState.cycle || 1) + 1,
-          phase: 'LOBBY'
+          phase: 'LOBBY',
+          showBottomLeaderboard: true
+        });
+        break;
+      case 'PREVIOUS_CYCLE':
+        await update(gameRef, {
+          cycle: Math.max(1, (gameState.cycle || 1) - 1),
+          phase: 'LOBBY',
+          showBottomLeaderboard: true
         });
         break;
       case 'REFRESH_TEAMS':
@@ -225,7 +276,10 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
     
     submissions.forEach(async (sub: any) => {
       const isCorrect = JSON.stringify(sub.submission) === JSON.stringify(correctOrder);
-      await update(ref(db, `gameState/teams/${sub.teamId}`), {
+      const teamRef = ref(db, `gameState/teams/${sub.teamId}`);
+      
+      // Use update instead of set to preserve name and other fields if they exist
+      await update(teamRef, {
         isCorrect: isCorrect ? 1 : 0,
         fffTime: sub.timeTaken
       });
@@ -262,6 +316,9 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
         <div className="flex space-x-4">
           <button onClick={() => sendAction('REFRESH_TEAMS')} className="bg-gray-600 hover:bg-gray-700 px-4 py-2 rounded-lg text-sm font-bold flex items-center">
             <RefreshCw className="w-4 h-4 mr-2" /> Refresh Teams
+          </button>
+          <button onClick={() => sendAction('PREVIOUS_CYCLE')} className="bg-gray-600 hover:bg-gray-700 px-4 py-2 rounded-lg text-sm font-bold flex items-center">
+            <RefreshCw className="w-4 h-4 mr-2" /> Previous Cycle
           </button>
           <button onClick={() => sendAction('NEXT_CYCLE')} className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg text-sm font-bold flex items-center">
             <Play className="w-4 h-4 mr-2" /> Next Cycle
@@ -306,7 +363,7 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
             />
             <AdminButton 
               icon={<Trophy />} label="Show Leaderboard" 
-              onClick={() => {}} 
+              onClick={() => sendAction('SHOW_LEADERBOARD')} 
               active={gameState.phase === 'FFF_RESULT'}
             />
           </div>
@@ -317,7 +374,14 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
               <div className="space-y-2">
                 {(gameState.teams || [])
                   .filter(t => t.isCorrect === 1)
-                  .sort((a, b) => (a.fffTime || 0) - (b.fffTime || 0))
+                  .sort((a, b) => {
+                    // First priority: Correctness (1 comes before 0)
+                    if (a.isCorrect !== b.isCorrect) {
+                      return b.isCorrect - a.isCorrect;
+                    }
+                    // Second priority: Time (ascending)
+                    return (a.fffTime || 0) - (b.fffTime || 0);
+                  })
                   .map((team, index) => (
                     <button 
                       key={team.id || index}
@@ -325,7 +389,7 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
                       className="w-full bg-[#0a0a2a] hover:bg-blue-900/30 p-3 rounded-xl border border-white/5 flex justify-between items-center transition-colors"
                     >
                       <span className="font-bold">{team.name}</span>
-                      <span className="font-mono text-blue-400">{team.fffTime}ms</span>
+                      <span className="font-mono text-blue-400">{(team.fffTime! / 1000).toFixed(5)}s</span>
                     </button>
                   ))}
                 
@@ -392,7 +456,12 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
             <AdminButton 
               icon={<Play />} label="Show Question" 
               onClick={() => sendAction('START_HOT_SEAT_QUESTION', { question: currentHotSeatQuestion })} 
-              active={gameState.phase === 'HOT_SEAT' || gameState.phase === 'FFF_RESULT'}
+              active={gameState.phase === 'HOT_SEAT' || gameState.phase === 'FFF_RESULT' || gameState.phase === 'HOT_SEAT_QUESTION' || gameState.phase === 'HOT_SEAT_OPTIONS'}
+            />
+            <AdminButton 
+              icon={<Eye />} label="Show Options" 
+              onClick={() => sendAction('SHOW_HOT_SEAT_OPTIONS')} 
+              active={gameState.phase === 'HOT_SEAT_QUESTION'}
             />
             <div className="bg-[#0a0a2a] p-4 rounded-2xl border border-white/10 flex flex-col space-y-2">
               <span className="text-[10px] font-bold text-gray-500 uppercase text-center">Timer Controls</span>
@@ -460,18 +529,30 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
             />
             <AdminButton 
               icon={<XCircle />} label="Mark Wrong" 
-              onClick={() => sendAction('UPDATE_SCORE', { teamId: gameState.hotSeatTeamId, type: 'hotSeat', amount: selectedDifficulty === 'easy' ? -10 : selectedDifficulty === 'medium' ? -20 : -30 })} 
+              onClick={() => sendAction('UPDATE_SCORE', { teamId: gameState.hotSeatTeamId, type: 'hotSeat', amount: 0 })} 
               active={gameState.phase === 'HOT_SEAT' && gameState.revealCorrect}
               variant="danger"
             />
           </div>
 
-          <div className="mt-6 grid grid-cols-2 gap-4">
-            <button onClick={() => sendAction('ACTIVATE_LIFELINE', { lifeline: 'debugHelp' })} className="bg-purple-600/20 hover:bg-purple-600/40 border border-purple-500/50 p-3 rounded-xl text-xs font-bold">
+          <div className="mt-6 grid grid-cols-3 gap-4">
+            <button 
+              onClick={() => sendAction('ACTIVATE_LIFELINE', { lifeline: 'debugHelp' })} 
+              className={`p-3 rounded-xl text-xs font-bold border transition-all ${gameState.activeLifeline === 'debugHelp' ? 'bg-purple-600 border-purple-400 text-white' : 'bg-purple-600/20 hover:bg-purple-600/40 border-purple-500/50 text-purple-100'}`}
+            >
               DEBUG HELP (-20)
             </button>
-            <button onClick={() => sendAction('ACTIVATE_LIFELINE', { lifeline: 'callDev' })} className="bg-orange-600/20 hover:bg-orange-600/40 border border-orange-500/50 p-3 rounded-xl text-xs font-bold">
+            <button 
+              onClick={() => sendAction('ACTIVATE_LIFELINE', { lifeline: 'callDev' })} 
+              className={`p-3 rounded-xl text-xs font-bold border transition-all ${gameState.activeLifeline === 'callDev' ? 'bg-orange-600 border-orange-400 text-white' : 'bg-orange-600/20 hover:bg-orange-600/40 border-orange-500/50 text-orange-100'}`}
+            >
               CALL DEV (-10)
+            </button>
+            <button 
+              onClick={() => sendAction('ACTIVATE_LIFELINE', { lifeline: 'crowdSource' })} 
+              className={`p-3 rounded-xl text-xs font-bold border transition-all ${gameState.activeLifeline === 'crowdSource' ? 'bg-blue-600 border-blue-400 text-white' : 'bg-blue-600/20 hover:bg-blue-600/40 border-blue-500/50 text-blue-100'}`}
+            >
+              CROWDSOURCE (-5)
             </button>
           </div>
         </section>
@@ -490,7 +571,7 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
               </div>
               <div className="flex justify-between text-xs text-gray-400">
                 <span>Score: <span className="text-white font-mono">{40 + (team.hotSeatPoints || 0) + (team.bonusPoints || 0)}</span></span>
-                <span>FFF: <span className="text-white font-mono">{team.fffTime || '--'}ms</span></span>
+                <span>FFF: <span className="text-white font-mono">{team.fffTime ? `${(team.fffTime / 1000).toFixed(5)}s` : '--'}</span></span>
               </div>
             </div>
           ))}

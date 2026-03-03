@@ -3,6 +3,8 @@ export type GamePhase =
   | 'FFF_QUESTION' 
   | 'FFF_OPTIONS' 
   | 'FFF_RESULT' 
+  | 'HOT_SEAT_QUESTION' 
+  | 'HOT_SEAT_OPTIONS' 
   | 'HOT_SEAT' 
   | 'CROWD_SOURCE' 
   | 'GAME_OVER';
@@ -53,6 +55,8 @@ export interface GameState {
   lockedOption: number | null;
   revealCorrect: boolean;
   crowdSourceVotes: Record<string, number>;
+  activeLifeline: 'debugHelp' | 'callDev' | 'crowdSource' | null;
+  showBottomLeaderboard: boolean;
   fffSubmissions?: Record<string, any>;
 }
 

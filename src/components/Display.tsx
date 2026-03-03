@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { GameState, Team } from '../types';
 import { BarChart, Bar, XAxis, YAxis, Cell, ResponsiveContainer, Text } from 'recharts';
-import { Timer, Trophy, Users } from 'lucide-react';
+import { Timer, Trophy, Users, Split, Phone } from 'lucide-react';
 
 interface DisplayProps {
   gameState: GameState | null;
@@ -114,19 +114,26 @@ const Display: React.FC<DisplayProps> = ({ gameState }) => {
                   <tr>
                     <th className="p-4">Rank</th>
                     <th className="p-4">Team Name</th>
-                    <th className="p-4">Time (ms)</th>
+                    <th className="p-4">Time (s)</th>
                     <th className="p-4">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
                   {(gameState.teams || [])
                     .filter(t => t.fffTime !== undefined)
-                    .sort((a, b) => (a.fffTime || 0) - (b.fffTime || 0))
+                    .sort((a, b) => {
+                      // First priority: Correctness (1 comes before 0)
+                      if (a.isCorrect !== b.isCorrect) {
+                        return b.isCorrect - a.isCorrect;
+                      }
+                      // Second priority: Time (ascending)
+                      return (a.fffTime || 0) - (b.fffTime || 0);
+                    })
                     .map((team, i) => (
                       <tr key={team.id} className={team.isCorrect === 1 ? "bg-green-500/10" : "bg-red-500/10"}>
                         <td className="p-4 font-mono">{i + 1}</td>
                         <td className="p-4 font-bold">{team.name}</td>
-                        <td className="p-4 font-mono">{team.fffTime}ms</td>
+                        <td className="p-4 font-mono">{(team.fffTime! / 1000).toFixed(5)}s</td>
                         <td className="p-4">
                           {team.isCorrect === 1 ? (
                             <span className="text-green-400 flex items-center"><Trophy className="w-4 h-4 mr-1" /> Correct</span>
@@ -142,7 +149,7 @@ const Display: React.FC<DisplayProps> = ({ gameState }) => {
           </motion.div>
         )}
 
-        {gameState.phase === 'HOT_SEAT' && (
+        {['HOT_SEAT', 'HOT_SEAT_QUESTION', 'HOT_SEAT_OPTIONS'].includes(gameState.phase) && !gameState.activeLifeline && (
           <motion.div 
             key="hot_seat"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -184,51 +191,83 @@ const Display: React.FC<DisplayProps> = ({ gameState }) => {
                 </div>
               )}
               <h2 className="text-4xl font-bold text-center mb-12">{gameState.currentQuestion?.text}</h2>
-              <div className="grid grid-cols-2 gap-6">
-                {gameState.currentQuestion?.options.map((opt, i) => {
-                  const isLocked = gameState.lockedOption === i;
-                  const isCorrect = gameState.currentQuestion?.correctIndex === i;
-                  const showReveal = gameState.revealCorrect;
-                  
-                  let bgColor = 'bg-[#0a0a2a] border-white/10';
-                  let textColor = '';
-                  let iconColor = 'bg-blue-600';
+              {gameState.phase !== 'HOT_SEAT_QUESTION' && (
+                <div className="grid grid-cols-2 gap-6">
+                  {gameState.currentQuestion?.options.map((opt, i) => {
+                    const isLocked = gameState.lockedOption === i;
+                    const isCorrect = gameState.currentQuestion?.correctIndex === i;
+                    const showReveal = gameState.revealCorrect;
+                    
+                    let bgColor = 'bg-[#0a0a2a] border-white/10';
+                    let textColor = '';
+                    let iconColor = 'bg-blue-600';
 
-                  if (showReveal) {
-                    if (isCorrect) {
-                      bgColor = 'bg-green-600/20 border-green-500 shadow-[0_0_20px_rgba(34,197,94,0.3)]';
-                      textColor = 'text-green-400 font-bold';
-                      iconColor = 'bg-green-600';
+                    if (showReveal) {
+                      if (isCorrect) {
+                        bgColor = 'bg-green-600/20 border-green-500 shadow-[0_0_20px_rgba(34,197,94,0.3)]';
+                        textColor = 'text-green-400 font-bold';
+                        iconColor = 'bg-green-600';
+                      } else if (isLocked) {
+                        bgColor = 'bg-red-600/20 border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.3)]';
+                        textColor = 'text-red-400 font-bold';
+                        iconColor = 'bg-red-600';
+                      }
                     } else if (isLocked) {
-                      bgColor = 'bg-red-600/20 border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.3)]';
-                      textColor = 'text-red-400 font-bold';
-                      iconColor = 'bg-red-600';
+                      bgColor = 'bg-yellow-500/20 border-yellow-500 shadow-[0_0_20px_rgba(234,179,8,0.3)]';
+                      textColor = 'text-yellow-400 font-bold';
+                      iconColor = 'bg-yellow-500 text-black';
                     }
-                  } else if (isLocked) {
-                    bgColor = 'bg-yellow-500/20 border-yellow-500 shadow-[0_0_20px_rgba(234,179,8,0.3)]';
-                    textColor = 'text-yellow-400 font-bold';
-                    iconColor = 'bg-yellow-500 text-black';
-                  }
 
-                  return (
-                    <div 
-                      key={i} 
-                      className={`p-6 rounded-2xl border transition-all flex items-center space-x-4 ${bgColor}`}
-                    >
-                      <span className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${iconColor}`}>
-                        {String.fromCharCode(65 + i)}
-                      </span>
-                      <span className={`text-xl ${textColor}`}>{opt}</span>
-                    </div>
-                  );
-                })}
-              </div>
+                    return (
+                      <div 
+                        key={i} 
+                        className={`p-6 rounded-2xl border transition-all flex items-center space-x-4 ${bgColor}`}
+                      >
+                        <span className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${iconColor}`}>
+                          {String.fromCharCode(65 + i)}
+                        </span>
+                        <span className={`text-xl ${textColor}`}>{opt}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             <div className="mt-12 flex space-x-8">
               <LifelineIcon active={gameState.lifelines.debugHelp} label="Debug Help" cost="-20" />
               <LifelineIcon active={gameState.lifelines.callDev} label="Call Dev" cost="-10" />
               <LifelineIcon active={gameState.lifelines.crowdSource} label="Crowd Source" cost="-5" />
+            </div>
+          </motion.div>
+        )}
+
+        {gameState.activeLifeline && (
+          <motion.div 
+            key="lifeline_logo"
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.8, opacity: 0 }}
+            className="h-full flex flex-col items-center justify-center space-y-12"
+          >
+            <div className="p-20 bg-blue-600/10 rounded-full border-8 border-blue-500/50 shadow-[0_0_80px_rgba(59,130,246,0.3)] relative">
+              <motion.div 
+                animate={{ rotate: 360 }}
+                transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
+                className="absolute inset-0 border-4 border-dashed border-blue-400/20 rounded-full scale-110"
+              />
+              {gameState.activeLifeline === 'debugHelp' && <Split className="w-48 h-48 text-blue-400" />}
+              {gameState.activeLifeline === 'callDev' && <Phone className="w-48 h-48 text-blue-400" />}
+              {gameState.activeLifeline === 'crowdSource' && <Users className="w-48 h-48 text-blue-400" />}
+            </div>
+            <div className="text-center space-y-4">
+              <h2 className="text-6xl font-black uppercase tracking-[0.3em] text-white drop-shadow-2xl">
+                {gameState.activeLifeline === 'debugHelp' ? 'Debug Help' : 
+                 gameState.activeLifeline === 'callDev' ? 'Call Dev' : 'Crowdsource'}
+              </h2>
+              <div className="inline-block px-6 py-2 bg-blue-500/20 border border-blue-500/30 rounded-full text-blue-400 font-bold tracking-widest uppercase text-sm animate-pulse">
+                Lifeline Active
+              </div>
             </div>
           </motion.div>
         )}
@@ -270,7 +309,7 @@ const Display: React.FC<DisplayProps> = ({ gameState }) => {
       </AnimatePresence>
 
       {/* Persistent Leaderboard at the bottom during certain states */}
-      {['LOBBY', 'GAME_OVER', 'FFF_RESULT', 'HOT_SEAT'].includes(gameState.phase) && (
+      {['LOBBY', 'GAME_OVER', 'FFF_RESULT', 'HOT_SEAT', 'HOT_SEAT_QUESTION', 'HOT_SEAT_OPTIONS'].includes(gameState.phase) && gameState.showBottomLeaderboard && (
         <div className="fixed bottom-8 left-8 right-8">
           <div className="bg-[#1a1a4a]/80 backdrop-blur-xl p-6 rounded-3xl border border-white/10">
             <h3 className="text-xl font-bold mb-4 flex items-center"><Trophy className="mr-2 text-yellow-500" /> Live Leaderboard</h3>

@@ -16,6 +16,31 @@ const Volunteer: React.FC<VolunteerProps> = ({ gameState, teamId }) => {
   const [voted, setVoted] = useState(false);
   const [timeLeft, setTimeLeft] = useState(0);
 
+  // Auto-re-registration logic
+  useEffect(() => {
+    if (gameState && teamId) {
+      const teams = gameState.teams || [];
+      const teamExists = teams.some(t => t.id === teamId);
+      const teamHasName = teams.find(t => t.id === teamId)?.name;
+      
+      if (!teamExists || !teamHasName) {
+        const storedName = localStorage.getItem('kbc_teamName');
+        if (storedName) {
+          console.log('Re-registering team:', teamId, storedName);
+          const teamRef = ref(db, `gameState/teams/${teamId}`);
+          update(teamRef, {
+            id: teamId,
+            name: storedName,
+            initialPoints: 40,
+            hotSeatPoints: 0,
+            bonusPoints: 0,
+            isCorrect: 0
+          });
+        }
+      }
+    }
+  }, [gameState?.teams, teamId]);
+
   useEffect(() => {
     if (gameState?.timer.isRunning && gameState.timer.type === 'FFF') {
       const interval = setInterval(() => {
@@ -197,15 +222,35 @@ const Volunteer: React.FC<VolunteerProps> = ({ gameState, teamId }) => {
           </motion.div>
         )}
 
-        {['HOT_SEAT', 'FFF_RESULT'].includes(gameState.phase) && (
+        {['HOT_SEAT', 'HOT_SEAT_QUESTION', 'HOT_SEAT_OPTIONS', 'FFF_RESULT', 'GAME_OVER'].includes(gameState.phase) && (
           <motion.div 
             key="locked"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="flex-1 flex flex-col items-center justify-center text-center space-y-4 opacity-50"
+            className="flex-1 flex flex-col items-center justify-center text-center space-y-6"
           >
-            <Lock className="w-16 h-16 text-gray-500" />
-            <h2 className="text-xl font-bold">Interface Locked</h2>
-            <p className="text-gray-400 text-sm">Gameplay is currently in progress on the main screen.</p>
+            <div className="relative">
+              <Lock className="w-20 h-20 text-blue-500/50" />
+              <motion.div 
+                animate={{ rotate: 360 }}
+                transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+                className="absolute inset-0 border-2 border-dashed border-blue-500/30 rounded-full scale-150"
+              />
+            </div>
+            <div className="space-y-2">
+              <h2 className="text-2xl font-bold tracking-tight">Interface Locked</h2>
+              <p className="text-gray-400 text-sm max-w-[250px] mx-auto">
+                {gameState.phase === 'FFF_RESULT' 
+                  ? "Fastest Finger results are being displayed. Check the main screen!" 
+                  : gameState.phase === 'HOT_SEAT'
+                  ? "A team is currently in the Hot Seat. Good luck to them!"
+                  : "The game has concluded. Thank you for playing!"}
+              </p>
+            </div>
+            <div className="pt-4">
+              <div className="inline-flex items-center px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-[10px] font-bold text-blue-400 animate-pulse uppercase tracking-widest">
+                Waiting for next round
+              </div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
