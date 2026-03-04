@@ -42,7 +42,7 @@ const Volunteer: React.FC<VolunteerProps> = ({ gameState, teamId }) => {
   }, [gameState?.teams, teamId]);
 
   useEffect(() => {
-    if (gameState?.timer.isRunning && gameState.timer.type === 'FFF') {
+    if (gameState?.timer.isRunning) {
       const interval = setInterval(() => {
         const remaining = Math.max(0, (gameState.timer.endTime || 0) - Date.now());
         setTimeLeft(Math.ceil(remaining / 1000));
@@ -52,7 +52,7 @@ const Volunteer: React.FC<VolunteerProps> = ({ gameState, teamId }) => {
     } else {
       setTimeLeft(0);
     }
-  }, [gameState?.timer.isRunning, gameState?.timer.endTime, gameState?.timer.type]);
+  }, [gameState?.timer.isRunning, gameState?.timer.endTime]);
 
   useEffect(() => {
     // Team registration is handled in App.tsx login
@@ -198,25 +198,45 @@ const Volunteer: React.FC<VolunteerProps> = ({ gameState, teamId }) => {
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="flex-1 flex flex-col"
           >
-            <h2 className="text-2xl font-bold mb-8 flex items-center"><Vote className="mr-3 text-blue-400" /> Audience Poll</h2>
-            {!voted ? (
-              <div className="grid grid-cols-1 gap-4">
-                {['A', 'B', 'C', 'D'].map((opt) => (
-                  <button 
-                    key={opt}
-                    onClick={() => handleVote(opt)}
-                    className="bg-[#1a1a4a] hover:bg-blue-600/20 p-6 rounded-2xl border border-white/10 text-left flex items-center space-x-4 transition-colors"
-                  >
-                    <span className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center font-black text-xl">{opt}</span>
-                    <span className="text-lg font-bold">Option {opt}</span>
-                  </button>
-                ))}
+            <div className="flex justify-between items-center mb-8">
+              <h2 className="text-2xl font-bold flex items-center"><Vote className="mr-3 text-blue-400" /> Audience Poll</h2>
+              <div className={`text-2xl font-mono font-bold ${timeLeft <= 5 ? 'text-red-500 animate-pulse' : 'text-blue-400'}`}>
+                {timeLeft}s
               </div>
+            </div>
+            
+            {teamId === gameState.hotSeatTeamId ? (
+              <div className="flex-1 flex flex-col items-center justify-center text-center space-y-4">
+                <Lock className="w-20 h-20 text-yellow-500/50" />
+                <h2 className="text-2xl font-bold">You are in the Hot Seat!</h2>
+                <p className="text-gray-400">You cannot vote in your own audience poll. Good luck!</p>
+              </div>
+            ) : timeLeft > 0 ? (
+              !voted ? (
+                <div className="grid grid-cols-1 gap-4">
+                  {['A', 'B', 'C', 'D'].map((opt) => (
+                    <button 
+                      key={opt}
+                      onClick={() => handleVote(opt)}
+                      className="bg-[#1a1a4a] hover:bg-blue-600/20 p-6 rounded-2xl border border-white/10 text-left flex items-center space-x-4 transition-colors"
+                    >
+                      <span className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center font-black text-xl">{opt}</span>
+                      <span className="text-lg font-bold">Option {opt}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex-1 flex flex-col items-center justify-center text-center space-y-4">
+                  <CheckCircle className="w-20 h-20 text-green-500" />
+                  <h2 className="text-2xl font-bold">Vote Cast!</h2>
+                  <p className="text-gray-400">Your vote has been recorded. Watch the screen for results.</p>
+                </div>
+              )
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center text-center space-y-4">
-                <CheckCircle className="w-20 h-20 text-green-500" />
-                <h2 className="text-2xl font-bold">Vote Cast!</h2>
-                <p className="text-gray-400">Your vote has been recorded. Watch the screen for results.</p>
+                <Clock className="w-20 h-20 text-red-500/50" />
+                <h2 className="text-2xl font-bold">Voting Closed</h2>
+                <p className="text-gray-400">The 15-second voting period has ended. Results are on the main screen.</p>
               </div>
             )}
           </motion.div>

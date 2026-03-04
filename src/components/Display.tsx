@@ -190,47 +190,58 @@ const Display: React.FC<DisplayProps> = ({ gameState }) => {
                   </div>
                 </div>
               )}
-              <h2 className="text-4xl font-bold text-center mb-12">{gameState.currentQuestion?.text}</h2>
-              {gameState.phase !== 'HOT_SEAT_QUESTION' && (
-                <div className="grid grid-cols-2 gap-6">
-                  {gameState.currentQuestion?.options.map((opt, i) => {
-                    const isLocked = gameState.lockedOption === i;
-                    const isCorrect = gameState.currentQuestion?.correctIndex === i;
-                    const showReveal = gameState.revealCorrect;
-                    
-                    let bgColor = 'bg-[#0a0a2a] border-white/10';
-                    let textColor = '';
-                    let iconColor = 'bg-blue-600';
-
-                    if (showReveal) {
-                      if (isCorrect) {
-                        bgColor = 'bg-green-600/20 border-green-500 shadow-[0_0_20px_rgba(34,197,94,0.3)]';
-                        textColor = 'text-green-400 font-bold';
-                        iconColor = 'bg-green-600';
-                      } else if (isLocked) {
-                        bgColor = 'bg-red-600/20 border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.3)]';
-                        textColor = 'text-red-400 font-bold';
-                        iconColor = 'bg-red-600';
-                      }
-                    } else if (isLocked) {
-                      bgColor = 'bg-yellow-500/20 border-yellow-500 shadow-[0_0_20px_rgba(234,179,8,0.3)]';
-                      textColor = 'text-yellow-400 font-bold';
-                      iconColor = 'bg-yellow-500 text-black';
-                    }
-
-                    return (
-                      <div 
-                        key={i} 
-                        className={`p-6 rounded-2xl border transition-all flex items-center space-x-4 ${bgColor}`}
-                      >
-                        <span className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${iconColor}`}>
-                          {String.fromCharCode(65 + i)}
-                        </span>
-                        <span className={`text-xl ${textColor}`}>{opt}</span>
-                      </div>
-                    );
-                  })}
+              {gameState.phase === 'HOT_SEAT' ? (
+                <div className="text-center py-12">
+                  <h2 className="text-5xl font-black text-white mb-4 uppercase tracking-tighter">Congratulations!</h2>
+                  <p className="text-2xl text-blue-400 font-bold">
+                    {gameState.teams.find(t => t.id === gameState.hotSeatTeamId)?.name} is in the Hot Seat!
+                  </p>
                 </div>
+              ) : (
+                <>
+                  <h2 className="text-4xl font-bold text-center mb-12">{gameState.currentQuestion?.text}</h2>
+                  {gameState.phase !== 'HOT_SEAT_QUESTION' && (
+                    <div className="grid grid-cols-2 gap-6">
+                      {gameState.currentQuestion?.options.map((opt, i) => {
+                        const isLocked = gameState.lockedOption === i;
+                        const isCorrect = gameState.currentQuestion?.correctIndex === i;
+                        const showReveal = gameState.revealCorrect;
+                        
+                        let bgColor = 'bg-[#0a0a2a] border-white/10';
+                        let textColor = '';
+                        let iconColor = 'bg-blue-600';
+
+                        if (showReveal) {
+                          if (isCorrect) {
+                            bgColor = 'bg-green-600/20 border-green-500 shadow-[0_0_20px_rgba(34,197,94,0.3)]';
+                            textColor = 'text-green-400 font-bold';
+                            iconColor = 'bg-green-600';
+                          } else if (isLocked) {
+                            bgColor = 'bg-red-600/20 border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.3)]';
+                            textColor = 'text-red-400 font-bold';
+                            iconColor = 'bg-red-600';
+                          }
+                        } else if (isLocked) {
+                          bgColor = 'bg-yellow-500/20 border-yellow-500 shadow-[0_0_20px_rgba(234,179,8,0.3)]';
+                          textColor = 'text-yellow-400 font-bold';
+                          iconColor = 'bg-yellow-500 text-black';
+                        }
+
+                        return (
+                          <div 
+                            key={i} 
+                            className={`p-6 rounded-2xl border transition-all flex items-center space-x-4 ${bgColor}`}
+                          >
+                            <span className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${iconColor}`}>
+                              {String.fromCharCode(65 + i)}
+                            </span>
+                            <span className={`text-xl ${textColor}`}>{opt}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
               )}
             </div>
 
@@ -278,8 +289,25 @@ const Display: React.FC<DisplayProps> = ({ gameState }) => {
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="h-full flex flex-col items-center justify-center w-full max-w-4xl mx-auto"
           >
-            <h2 className="text-4xl font-bold mb-12 flex items-center"><Users className="mr-4 w-10 h-10 text-blue-400" /> Audience Poll</h2>
-            <div className="h-[400px] w-full bg-[#1a1a4a] p-8 rounded-3xl border border-white/10">
+            <div className="flex justify-between items-center w-full mb-12">
+              <h2 className="text-4xl font-bold flex items-center"><Users className="mr-4 w-10 h-10 text-blue-400" /> Audience Poll</h2>
+              {timeLeft > 0 && (
+                <div className="bg-blue-600/20 px-6 py-2 rounded-2xl border border-blue-500/50 flex items-center space-x-4">
+                  <Timer className="w-8 h-8 text-blue-400 animate-pulse" />
+                  <span className="text-4xl font-mono font-bold text-blue-400">{timeLeft}s</span>
+                </div>
+              )}
+            </div>
+            
+            <div className="h-[400px] w-full bg-[#1a1a4a] p-8 rounded-3xl border border-white/10 relative overflow-hidden">
+              {timeLeft > 0 && (
+                <div className="absolute inset-0 bg-[#0a0a2a]/40 backdrop-blur-sm z-10 flex items-center justify-center">
+                  <div className="text-center space-y-4">
+                    <div className="text-6xl font-black text-white tracking-widest animate-bounce">VOTING OPEN</div>
+                    <div className="text-blue-400 font-bold uppercase tracking-widest">Cast your votes now!</div>
+                  </div>
+                </div>
+              )}
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={Object.entries(gameState.crowdSourceVotes).map(([name, value]) => ({ name, value }))}>
                   <XAxis dataKey="name" stroke="#94a3b8" />
@@ -292,13 +320,14 @@ const Display: React.FC<DisplayProps> = ({ gameState }) => {
                 </BarChart>
               </ResponsiveContainer>
             </div>
+            
             <div className="grid grid-cols-4 gap-8 w-full mt-8">
               {Object.entries(gameState.crowdSourceVotes).map(([name, value]) => {
                 const total = Object.values(gameState.crowdSourceVotes).reduce((a, b) => (a as number) + (b as number), 0) as number;
                 const percent = total === 0 ? 0 : Math.round(((value as number) / total) * 100);
                 return (
                   <div key={name} className="text-center">
-                    <div className="text-4xl font-black text-blue-400">{percent}%</div>
+                    <div className="text-4xl font-black text-blue-400">{timeLeft > 0 ? '??' : `${percent}%`}</div>
                     <div className="text-gray-400 uppercase tracking-widest text-sm">Option {name}</div>
                   </div>
                 );

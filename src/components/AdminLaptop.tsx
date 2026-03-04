@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
+import { motion } from 'motion/react';
 import { GameState } from '../types';
 import { FFF_QUESTIONS, HOT_SEAT_QUESTIONS } from '../constants';
-import { Play, Eye, Lock, Trophy, UserCheck, RefreshCw, CheckCircle, XCircle, Zap, Pause, Square } from 'lucide-react';
+import { Play, Eye, Lock, Trophy, UserCheck, RefreshCw, CheckCircle, XCircle, Zap, Pause, Square, Users } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { ref, update, set, remove } from 'firebase/database';
 
@@ -102,6 +103,7 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
           currentQuestionId: payload.question.id,
           lockedOption: null,
           revealCorrect: false,
+          savedRemainingTime: null,
           'timer/isRunning': false,
           'timer/isPaused': false,
           'timer/startTime': null,
@@ -137,7 +139,7 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
           'timer/type': payload.type || 'HOT_SEAT'
         });
         break;
-      case 'PAUSE_TIMER':
+      case 'PAUSE_TIMER': {
         if (!gameState || !gameState.timer.isRunning) return;
         const remaining = Math.max(0, (gameState.timer.endTime || 0) - Date.now());
         await update(gameRef, {
@@ -146,6 +148,7 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
           'timer/remainingTime': remaining
         });
         break;
+      }
       case 'RESUME_TIMER':
         if (!gameState || !gameState.timer.isPaused) return;
         await update(gameRef, {
@@ -189,7 +192,7 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
           await update(ref(db, `gameState/teams/${payload.teamId}`), updates);
         }
         break;
-      case 'ACTIVATE_LIFELINE':
+      case 'ACTIVATE_LIFELINE': {
         if (!gameState) return;
         const lifeline = payload.lifeline;
         const isAlreadyActive = gameState.activeLifeline === lifeline;
@@ -225,6 +228,38 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
           });
         }
         break;
+      }
+      case 'ACTIVATE_VOTING':
+        if (!gameState) return;
+        const votingDuration = 15000;
+        await update(gameRef, {
+          phase: 'CROWD_SOURCE',
+          activeLifeline: null,
+          crowdSourceVotes: { A: 0, B: 0, C: 0, D: 0 },
+          savedRemainingTime: gameState.timer.remainingTime,
+          'timer/duration': votingDuration,
+          'timer/startTime': Date.now(),
+          'timer/endTime': Date.now() + votingDuration,
+          'timer/remainingTime': votingDuration,
+          'timer/isRunning': true,
+          'timer/isPaused': false,
+          'timer/type': 'HOT_SEAT'
+        });
+        break;
+      case 'RESUME_QUESTION': {
+        if (!gameState) return;
+        const remaining = gameState.savedRemainingTime || 0;
+        await update(gameRef, {
+          phase: 'HOT_SEAT_OPTIONS',
+          'timer/isRunning': true,
+          'timer/isPaused': false,
+          'timer/startTime': Date.now(),
+          'timer/endTime': Date.now() + remaining,
+          'timer/remainingTime': remaining,
+          savedRemainingTime: null
+        });
+        break;
+      }
       case 'RESET_GAME':
         await set(gameRef, {
           phase: 'LOBBY',
@@ -236,6 +271,7 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
           lifelines: { debugHelp: false, callDev: false, crowdSource: false },
           activeLifeline: null,
           showBottomLeaderboard: true,
+          savedRemainingTime: null,
           lockedOption: null,
           revealCorrect: false,
           timer: {
@@ -456,12 +492,12 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
             <AdminButton 
               icon={<Play />} label="Show Question" 
               onClick={() => sendAction('START_HOT_SEAT_QUESTION', { question: currentHotSeatQuestion })} 
-              active={gameState.phase === 'HOT_SEAT' || gameState.phase === 'FFF_RESULT' || gameState.phase === 'HOT_SEAT_QUESTION' || gameState.phase === 'HOT_SEAT_OPTIONS'}
+              active={gameState.phase === 'HOT_SEAT' || gameState.phase === 'HOT_SEAT_QUESTION' || gameState.phase === 'HOT_SEAT_OPTIONS' || gameState.phase === 'CROWD_SOURCE'}
             />
             <AdminButton 
               icon={<Eye />} label="Show Options" 
               onClick={() => sendAction('SHOW_HOT_SEAT_OPTIONS')} 
-              active={gameState.phase === 'HOT_SEAT_QUESTION'}
+              active={gameState.phase === 'HOT_SEAT_QUESTION' || gameState.phase === 'CROWD_SOURCE'}
             />
             <div className="bg-[#0a0a2a] p-4 rounded-2xl border border-white/10 flex flex-col space-y-2">
               <span className="text-[10px] font-bold text-gray-500 uppercase text-center">Timer Controls</span>
@@ -519,41 +555,67 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
             <AdminButton 
               icon={<Eye />} label="Reveal Correct" 
               onClick={() => sendAction('REVEAL_CORRECT')} 
-              active={gameState.phase === 'HOT_SEAT' && gameState.lockedOption !== null && !gameState.revealCorrect}
+              active={(gameState.phase === 'HOT_SEAT_OPTIONS' || gameState.phase === 'CROWD_SOURCE') && gameState.lockedOption !== null && !gameState.revealCorrect}
             />
             <AdminButton 
               icon={<CheckCircle />} label="Mark Correct" 
               onClick={() => sendAction('UPDATE_SCORE', { teamId: gameState.hotSeatTeamId, type: 'hotSeat', amount: selectedDifficulty === 'easy' ? 30 : selectedDifficulty === 'medium' ? 50 : 100 })} 
-              active={gameState.phase === 'HOT_SEAT' && gameState.revealCorrect}
+              active={(gameState.phase === 'HOT_SEAT_OPTIONS' || gameState.phase === 'CROWD_SOURCE') && gameState.revealCorrect}
               variant="success"
             />
             <AdminButton 
               icon={<XCircle />} label="Mark Wrong" 
               onClick={() => sendAction('UPDATE_SCORE', { teamId: gameState.hotSeatTeamId, type: 'hotSeat', amount: 0 })} 
-              active={gameState.phase === 'HOT_SEAT' && gameState.revealCorrect}
+              active={(gameState.phase === 'HOT_SEAT_OPTIONS' || gameState.phase === 'CROWD_SOURCE') && gameState.revealCorrect}
               variant="danger"
             />
           </div>
 
-          <div className="mt-6 grid grid-cols-3 gap-4">
-            <button 
-              onClick={() => sendAction('ACTIVATE_LIFELINE', { lifeline: 'debugHelp' })} 
-              className={`p-3 rounded-xl text-xs font-bold border transition-all ${gameState.activeLifeline === 'debugHelp' ? 'bg-purple-600 border-purple-400 text-white' : 'bg-purple-600/20 hover:bg-purple-600/40 border-purple-500/50 text-purple-100'}`}
-            >
-              DEBUG HELP (-20)
-            </button>
-            <button 
-              onClick={() => sendAction('ACTIVATE_LIFELINE', { lifeline: 'callDev' })} 
-              className={`p-3 rounded-xl text-xs font-bold border transition-all ${gameState.activeLifeline === 'callDev' ? 'bg-orange-600 border-orange-400 text-white' : 'bg-orange-600/20 hover:bg-orange-600/40 border-orange-500/50 text-orange-100'}`}
-            >
-              CALL DEV (-10)
-            </button>
-            <button 
-              onClick={() => sendAction('ACTIVATE_LIFELINE', { lifeline: 'crowdSource' })} 
-              className={`p-3 rounded-xl text-xs font-bold border transition-all ${gameState.activeLifeline === 'crowdSource' ? 'bg-blue-600 border-blue-400 text-white' : 'bg-blue-600/20 hover:bg-blue-600/40 border-blue-500/50 text-blue-100'}`}
-            >
-              CROWDSOURCE (-5)
-            </button>
+          <div className="mt-6 flex flex-col space-y-4">
+            <div className="grid grid-cols-3 gap-4">
+              <button 
+                onClick={() => sendAction('ACTIVATE_LIFELINE', { lifeline: 'debugHelp' })} 
+                className={`p-3 rounded-xl text-xs font-bold border transition-all ${gameState.activeLifeline === 'debugHelp' ? 'bg-purple-600 border-purple-400 text-white' : 'bg-purple-600/20 hover:bg-purple-600/40 border-purple-500/50 text-purple-100'}`}
+              >
+                DEBUG HELP (-20)
+              </button>
+              <button 
+                onClick={() => sendAction('ACTIVATE_LIFELINE', { lifeline: 'callDev' })} 
+                className={`p-3 rounded-xl text-xs font-bold border transition-all ${gameState.activeLifeline === 'callDev' ? 'bg-orange-600 border-orange-400 text-white' : 'bg-orange-600/20 hover:bg-orange-600/40 border-orange-500/50 text-orange-100'}`}
+              >
+                CALL DEV (-10)
+              </button>
+              <button 
+                onClick={() => sendAction('ACTIVATE_LIFELINE', { lifeline: 'crowdSource' })} 
+                className={`p-3 rounded-xl text-xs font-bold border transition-all ${gameState.activeLifeline === 'crowdSource' || gameState.phase === 'CROWD_SOURCE' ? 'bg-blue-600 border-blue-400 text-white' : 'bg-blue-600/20 hover:bg-blue-600/40 border-blue-500/50 text-blue-100'}`}
+              >
+                CROWDSOURCE (-5)
+              </button>
+            </div>
+            
+            {gameState.activeLifeline === 'crowdSource' && gameState.phase !== 'CROWD_SOURCE' && (
+              <motion.button
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                onClick={() => sendAction('ACTIVATE_VOTING')}
+                className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-lg text-sm font-bold shadow-lg shadow-blue-500/20 flex items-center justify-center space-x-2"
+              >
+                <Users className="w-4 h-4" />
+                <span>ACTIVATE VOTING (15s)</span>
+              </motion.button>
+            )}
+
+            {gameState.phase === 'CROWD_SOURCE' && (
+              <motion.button
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                onClick={() => sendAction('RESUME_QUESTION')}
+                className="w-full bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg text-sm font-bold shadow-lg shadow-green-500/20 flex items-center justify-center space-x-2"
+              >
+                <Play className="w-4 h-4" />
+                <span>RESUME QUESTION</span>
+              </motion.button>
+            )}
           </div>
         </section>
       </div>
