@@ -57,6 +57,7 @@ export interface GameState {
   crowdSourceVotes: Record<string, number>;
   activeLifeline: 'debugHelp' | 'callDev' | 'crowdSource' | null;
   savedRemainingTime?: number | null;
+  savedDuration?: number | null;
   showBottomLeaderboard: boolean;
   fffSubmissions?: Record<string, any>;
 }

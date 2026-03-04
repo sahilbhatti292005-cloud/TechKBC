@@ -46,7 +46,7 @@ const Display: React.FC<DisplayProps> = ({ gameState }) => {
             <h1 className="text-6xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-600">
               COGNOS TAV TECH KBC
             </h1>
-            <div className="text-2xl font-mono text-blue-300">CYCLE {gameState.cycle} / 8</div>
+            <div className="text-2xl font-mono text-blue-300">CYCLE {gameState.cycle} / 10</div>
             <div className="grid grid-cols-4 gap-4 w-full max-w-4xl">
               {(gameState.teams || []).map((team, i) => (
                 <div key={team.id} className="bg-[#1a1a4a] p-4 rounded-xl border border-white/10 text-center">
@@ -89,7 +89,9 @@ const Display: React.FC<DisplayProps> = ({ gameState }) => {
                     cx="64" cy="64" r="60" 
                     fill="transparent" stroke={timeLeft <= 5 ? "#ef4444" : "#3b82f6"} strokeWidth="8" 
                     strokeDasharray="377"
-                    animate={{ strokeDashoffset: 377 - (377 * (timeLeft / (gameState.timer.duration / 1000))) }}
+                    animate={{ 
+                      strokeDashoffset: 377 - (377 * Math.min(1, Math.max(0, timeLeft / (gameState.timer.duration / 1000)))) 
+                    }}
                     transition={{ duration: 1, ease: "linear" }}
                   />
                 </svg>
@@ -120,20 +122,24 @@ const Display: React.FC<DisplayProps> = ({ gameState }) => {
                 </thead>
                 <tbody className="divide-y divide-white/5">
                   {(gameState.teams || [])
-                    .filter(t => t.fffTime !== undefined)
                     .sort((a, b) => {
                       // First priority: Correctness (1 comes before 0)
                       if (a.isCorrect !== b.isCorrect) {
                         return b.isCorrect - a.isCorrect;
                       }
                       // Second priority: Time (ascending)
-                      return (a.fffTime || 0) - (b.fffTime || 0);
+                      // Treat undefined/null or 999999999 as very slow
+                      const timeA = a.fffTime ?? 999999999;
+                      const timeB = b.fffTime ?? 999999999;
+                      return timeA - timeB;
                     })
                     .map((team, i) => (
                       <tr key={team.id} className={team.isCorrect === 1 ? "bg-green-500/10" : "bg-red-500/10"}>
                         <td className="p-4 font-mono">{i + 1}</td>
                         <td className="p-4 font-bold">{team.name}</td>
-                        <td className="p-4 font-mono">{(team.fffTime! / 1000).toFixed(5)}s</td>
+                        <td className="p-4 font-mono">
+                          {team.fffTime && team.fffTime < 999999999 ? `${(team.fffTime / 1000).toFixed(3)}s` : "—"}
+                        </td>
                         <td className="p-4">
                           {team.isCorrect === 1 ? (
                             <span className="text-green-400 flex items-center"><Trophy className="w-4 h-4 mr-1" /> Correct</span>
@@ -180,7 +186,9 @@ const Display: React.FC<DisplayProps> = ({ gameState }) => {
                       <motion.circle 
                         cx="48" cy="48" r="44" fill="transparent" stroke={timeLeft <= 10 ? "#ef4444" : "#3b82f6"} strokeWidth="4" 
                         strokeDasharray="276"
-                        animate={{ strokeDashoffset: 276 - (276 * (timeLeft / (gameState.timer.duration / 1000))) }}
+                        animate={{ 
+                          strokeDashoffset: 276 - (276 * Math.min(1, Math.max(0, timeLeft / (gameState.timer.duration / 1000)))) 
+                        }}
                         transition={{ duration: 1, ease: "linear" }}
                       />
                     </svg>

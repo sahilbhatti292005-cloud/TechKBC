@@ -12,7 +12,7 @@ interface AdminLaptopProps {
 
 const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
   const [selectedDifficulty, setSelectedDifficulty] = useState<'easy' | 'medium' | 'hard'>('easy');
-  const [questionIndex, setQuestionIndex] = useState(0);
+  const [questionIndices, setQuestionIndices] = useState({ easy: 0, medium: 0, hard: 0 });
   const [timeLeft, setTimeLeft] = useState(0);
 
   React.useEffect(() => {
@@ -104,6 +104,7 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
           lockedOption: null,
           revealCorrect: false,
           savedRemainingTime: null,
+          savedDuration: null,
           'timer/isRunning': false,
           'timer/isPaused': false,
           'timer/startTime': null,
@@ -237,6 +238,7 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
           activeLifeline: null,
           crowdSourceVotes: { A: 0, B: 0, C: 0, D: 0 },
           savedRemainingTime: gameState.timer.remainingTime,
+          savedDuration: gameState.timer.duration,
           'timer/duration': votingDuration,
           'timer/startTime': Date.now(),
           'timer/endTime': Date.now() + votingDuration,
@@ -249,6 +251,7 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
       case 'RESUME_QUESTION': {
         if (!gameState) return;
         const remaining = gameState.savedRemainingTime || 0;
+        const originalDuration = gameState.savedDuration || 30000;
         await update(gameRef, {
           phase: 'HOT_SEAT_OPTIONS',
           'timer/isRunning': true,
@@ -256,7 +259,35 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
           'timer/startTime': Date.now(),
           'timer/endTime': Date.now() + remaining,
           'timer/remainingTime': remaining,
-          savedRemainingTime: null
+          'timer/duration': originalDuration,
+          savedRemainingTime: null,
+          savedDuration: null
+        });
+        break;
+      }
+      case 'REFRESH_QUESTION': {
+        if (!gameState) return;
+        const diff = payload.difficulty as 'easy' | 'medium' | 'hard';
+        const newIndex = (questionIndices[diff] + 1) % HOT_SEAT_QUESTIONS[diff].length;
+        setQuestionIndices(prev => ({ ...prev, [diff]: newIndex }));
+        setSelectedDifficulty(diff);
+        
+        const newQuestion = HOT_SEAT_QUESTIONS[diff][newIndex];
+        const duration = diff === 'easy' ? 30000 : diff === 'medium' ? 45000 : 60000;
+        
+        await update(gameRef, {
+          phase: 'HOT_SEAT_QUESTION',
+          currentQuestion: newQuestion,
+          currentQuestionId: newQuestion.id,
+          lockedOption: null,
+          revealCorrect: false,
+          'timer/isRunning': false,
+          'timer/isPaused': false,
+          'timer/startTime': null,
+          'timer/endTime': null,
+          'timer/remainingTime': duration,
+          'timer/duration': duration,
+          'timer/type': 'HOT_SEAT'
         });
         break;
       }
@@ -272,6 +303,7 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
           activeLifeline: null,
           showBottomLeaderboard: true,
           savedRemainingTime: null,
+          savedDuration: null,
           lockedOption: null,
           revealCorrect: false,
           timer: {
@@ -308,22 +340,24 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
   const calculateFFFResults = () => {
     if (!gameState || !gameState.currentQuestion) return;
     const correctOrder = gameState.currentQuestion.correctOrder;
-    const submissions = gameState.fffSubmissions ? Object.values(gameState.fffSubmissions) : [];
+    const submissions = gameState.fffSubmissions || {};
     
-    submissions.forEach(async (sub: any) => {
-      const isCorrect = JSON.stringify(sub.submission) === JSON.stringify(correctOrder);
-      const teamRef = ref(db, `gameState/teams/${sub.teamId}`);
+    (gameState.teams || []).forEach(async (team) => {
+      const sub = submissions[team.id];
+      const isCorrect = sub ? JSON.stringify(sub.submission) === JSON.stringify(correctOrder) : false;
+      // If no submission, we set a very high time so they appear at the bottom
+      const fffTime = sub ? sub.timeTaken : 999999999; 
       
-      // Use update instead of set to preserve name and other fields if they exist
+      const teamRef = ref(db, `gameState/teams/${team.id}`);
       await update(teamRef, {
         isCorrect: isCorrect ? 1 : 0,
-        fffTime: sub.timeTaken
+        fffTime: fffTime
       });
     });
   };
 
-  const currentHotSeatQuestion = HOT_SEAT_QUESTIONS[selectedDifficulty][questionIndex % HOT_SEAT_QUESTIONS[selectedDifficulty].length];
-  const currentFFFQuestion = FFF_QUESTIONS[questionIndex % FFF_QUESTIONS.length];
+  const currentHotSeatQuestion = HOT_SEAT_QUESTIONS[selectedDifficulty][questionIndices[selectedDifficulty]];
+  const currentFFFQuestion = FFF_QUESTIONS[0]; // FFF usually only has one or we can use a separate index if needed
 
   if (!gameState) {
     return (
@@ -347,7 +381,7 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
       <header className="flex justify-between items-center bg-[#1a1a4a] p-6 rounded-2xl border border-white/10">
         <div>
           <h1 className="text-2xl font-bold">Admin Control Panel</h1>
-          <p className="text-gray-400 text-sm">Cycle {gameState.cycle} / 8 • Status: <span className="text-blue-400 font-mono">{gameState.phase}</span></p>
+          <p className="text-gray-400 text-sm">Cycle {gameState.cycle} / 10 • Status: <span className="text-blue-400 font-mono">{gameState.phase}</span></p>
         </div>
         <div className="flex space-x-4">
           <button onClick={() => sendAction('REFRESH_TEAMS')} className="bg-gray-600 hover:bg-gray-700 px-4 py-2 rounded-lg text-sm font-bold flex items-center">
@@ -470,18 +504,30 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
             {(['easy', 'medium', 'hard'] as const).map(d => (
               <button 
                 key={d}
-                onClick={() => { setSelectedDifficulty(d); setQuestionIndex(0); }}
+                onClick={() => setSelectedDifficulty(d)}
                 className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-widest border transition-colors ${selectedDifficulty === d ? 'bg-blue-600 border-blue-400' : 'bg-[#0a0a2a] border-white/10 text-gray-500'}`}
               >
                 {d}
               </button>
             ))}
           </div>
+
+          <div className="grid grid-cols-3 gap-2 mb-4">
+            {(['easy', 'medium', 'hard'] as const).map(d => (
+              <button 
+                key={`refresh-${d}`}
+                onClick={() => sendAction('REFRESH_QUESTION', { difficulty: d })}
+                className="bg-gray-800 hover:bg-gray-700 text-[10px] py-1 rounded border border-white/10 font-bold uppercase tracking-tighter"
+              >
+                Refresh {d}
+              </button>
+            ))}
+          </div>
           
           <div className="flex justify-between items-center mb-4">
-            <span className="text-xs text-gray-400">Question {questionIndex + 1}</span>
+            <span className="text-xs text-gray-400">Question {questionIndices[selectedDifficulty] + 1}</span>
             <button 
-              onClick={() => setQuestionIndex(prev => prev + 1)}
+              onClick={() => setQuestionIndices(prev => ({ ...prev, [selectedDifficulty]: (prev[selectedDifficulty] + 1) % HOT_SEAT_QUESTIONS[selectedDifficulty].length }))}
               className="text-xs text-blue-400 hover:underline"
             >
               Next Question

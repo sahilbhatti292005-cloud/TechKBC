@@ -90,16 +90,19 @@ const AdminMobile: React.FC<AdminMobileProps> = ({ gameState }) => {
 
           <div className="grid grid-cols-2 gap-4">
             <ScoreButton label="+30" onClick={() => updateScore(30)} variant="success" />
+            <ScoreButton label="-30" onClick={() => updateScore(-30)} variant="danger" />
             <ScoreButton label="+50" onClick={() => updateScore(50)} variant="success" />
+            <ScoreButton label="-50" onClick={() => updateScore(-50)} variant="danger" />
             <ScoreButton label="+100" onClick={() => updateScore(100)} variant="success" />
+            <ScoreButton label="-100" onClick={() => updateScore(-100)} variant="danger" />
             <ScoreButton label="+20 Bonus" onClick={() => updateScore(20, 'bonus')} variant="bonus" />
-            <ScoreButton label="Lock A" onClick={() => sendAction('LOCK_OPTION', { optionIndex: 0 })} variant="bonus" />
-            <ScoreButton label="Lock B" onClick={() => sendAction('LOCK_OPTION', { optionIndex: 1 })} variant="bonus" />
-            <ScoreButton label="Lock C" onClick={() => sendAction('LOCK_OPTION', { optionIndex: 2 })} variant="bonus" />
-            <ScoreButton label="Lock D" onClick={() => sendAction('LOCK_OPTION', { optionIndex: 3 })} variant="bonus" />
+            <ScoreButton label="-20 Bonus" onClick={() => updateScore(-20, 'bonus')} variant="bonus" />
             <ScoreButton label="-5 Crowd" onClick={() => updateScore(-5)} variant="danger" />
+            <ScoreButton label="+5 Recovery" onClick={() => updateScore(5)} variant="success" />
             <ScoreButton label="-10 Call" onClick={() => updateScore(-10)} variant="danger" />
+            <ScoreButton label="+10 Recovery" onClick={() => updateScore(10)} variant="success" />
             <ScoreButton label="-20 Debug" onClick={() => updateScore(-20)} variant="danger" />
+            <ScoreButton label="+20 Recovery" onClick={() => updateScore(20)} variant="success" />
           </div>
         </div>
       )}

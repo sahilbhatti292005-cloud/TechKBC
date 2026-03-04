@@ -42,6 +42,20 @@ export const HOT_SEAT_QUESTIONS: Record<string, Question[]> = {
       options: ["Instagram", "Excel", "Photoshop", "VS Code"],
       correctIndex: 0,
       difficulty: 'easy'
+    },
+    {
+      id: "e3",
+      text: "Which of these is used to browse the internet?",
+      options: ["Google Chrome", "Notepad", "Calculator", "Paint"],
+      correctIndex: 0,
+      difficulty: 'easy'
+    },
+    {
+      id: "e4",
+      text: "What is the brain of the computer?",
+      options: ["CPU", "RAM", "Hard Disk", "Monitor"],
+      correctIndex: 0,
+      difficulty: 'easy'
     }
   ],
   medium: [
@@ -58,6 +72,20 @@ export const HOT_SEAT_QUESTIONS: Record<string, Question[]> = {
       options: ["Directing network traffic", "Storing files", "Printing documents", "Generating power"],
       correctIndex: 0,
       difficulty: 'medium'
+    },
+    {
+      id: "m3",
+      text: "Which company developed the Java programming language?",
+      options: ["Sun Microsystems", "Microsoft", "Apple", "Google"],
+      correctIndex: 0,
+      difficulty: 'medium'
+    },
+    {
+      id: "m4",
+      text: "What does SQL stand for?",
+      options: ["Structured Query Language", "Simple Query Language", "Standard Query Language", "Sequential Query Language"],
+      correctIndex: 0,
+      difficulty: 'medium'
     }
   ],
   hard: [
@@ -72,6 +100,20 @@ export const HOT_SEAT_QUESTIONS: Record<string, Question[]> = {
       id: "h2",
       text: "What does the 'S' in HTTPS stand for?",
       options: ["Secure", "Simple", "Standard", "System"],
+      correctIndex: 0,
+      difficulty: 'hard'
+    },
+    {
+      id: "h3",
+      text: "Which of these is a NoSQL database?",
+      options: ["MongoDB", "MySQL", "PostgreSQL", "Oracle"],
+      correctIndex: 0,
+      difficulty: 'hard'
+    },
+    {
+      id: "h4",
+      text: "What is the port number for HTTP?",
+      options: ["80", "443", "21", "22"],
       correctIndex: 0,
       difficulty: 'hard'
     }
