@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { GameState } from '../types';
-import { UserCheck } from 'lucide-react';
+import { UserCheck, Trash2, AlertTriangle } from 'lucide-react';
 import { db } from '../lib/firebase';
-import { ref, update } from 'firebase/database';
+import { ref, update, remove } from 'firebase/database';
 
 interface AdminMobileProps {
   gameState: GameState | null;
@@ -10,6 +10,7 @@ interface AdminMobileProps {
 
 const AdminMobile: React.FC<AdminMobileProps> = ({ gameState }) => {
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const sendAction = async (action: string, payload: any = {}) => {
     if (!gameState) return;
@@ -27,6 +28,19 @@ const AdminMobile: React.FC<AdminMobileProps> = ({ gameState }) => {
           if (payload.type === 'bonus') updates.bonusPoints = (team.bonusPoints || 0) + payload.amount;
           await update(ref(db, `gameState/teams/${payload.teamId}`), updates);
         }
+        break;
+      case 'DELETE_TEAM':
+        const tid = payload.teamId;
+        if (!tid) return;
+        await remove(ref(db, `gameState/teams/${tid}`));
+        if (gameState.fffSubmissions && gameState.fffSubmissions[tid]) {
+          await remove(ref(db, `gameState/fffSubmissions/${tid}`));
+        }
+        if (gameState.hotSeatTeamId === tid) {
+          await update(gameRef, { hotSeatTeamId: null });
+        }
+        setSelectedTeamId(null);
+        setShowDeleteConfirm(false);
         break;
     }
   };
@@ -103,6 +117,50 @@ const AdminMobile: React.FC<AdminMobileProps> = ({ gameState }) => {
             <ScoreButton label="+10 Recovery" onClick={() => updateScore(10)} variant="success" />
             <ScoreButton label="-20 Debug" onClick={() => updateScore(-20)} variant="danger" />
             <ScoreButton label="+20 Recovery" onClick={() => updateScore(20)} variant="success" />
+          </div>
+
+          <div className="pt-6 border-t border-white/10">
+            <button 
+              onClick={() => setShowDeleteConfirm(true)}
+              className="w-full p-4 rounded-xl bg-red-600/10 border border-red-500/50 text-red-500 font-bold flex items-center justify-center space-x-2 active:bg-red-600/20 transition-all"
+            >
+              <Trash2 className="w-5 h-5" />
+              <span>DELETE TEAM PERMANENTLY</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && selectedTeam && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/80 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-[#1a1a4a] w-full max-w-sm rounded-3xl border border-red-500/30 p-8 space-y-6 shadow-2xl shadow-red-500/10">
+            <div className="flex flex-col items-center text-center space-y-4">
+              <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center">
+                <AlertTriangle className="w-8 h-8 text-red-500" />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-xl font-bold">Delete Team?</h3>
+                <p className="text-gray-400 text-sm">
+                  Are you sure you want to delete <span className="text-white font-bold">"{selectedTeam.name}"</span> permanently? This action cannot be undone.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-col space-y-3">
+              <button 
+                onClick={() => sendAction('DELETE_TEAM', { teamId: selectedTeam.id })}
+                className="w-full py-4 bg-red-600 hover:bg-red-700 text-white rounded-2xl font-bold shadow-lg shadow-red-600/20 transition-all"
+              >
+                Yes, Delete
+              </button>
+              <button 
+                onClick={() => setShowDeleteConfirm(false)}
+                className="w-full py-4 bg-white/5 hover:bg-white/10 text-gray-300 rounded-2xl font-bold transition-all"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}

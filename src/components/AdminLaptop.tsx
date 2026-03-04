@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { GameState } from '../types';
 import { FFF_QUESTIONS, HOT_SEAT_QUESTIONS } from '../constants';
-import { Play, Eye, Lock, Trophy, UserCheck, RefreshCw, CheckCircle, XCircle, Zap, Pause, Square, Users } from 'lucide-react';
+import { Play, Eye, Lock, Trophy, UserCheck, RefreshCw, CheckCircle, XCircle, Zap, Pause, Square, Users, AlertTriangle } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { ref, update, set, remove } from 'firebase/database';
 
@@ -14,6 +14,7 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
   const [selectedDifficulty, setSelectedDifficulty] = useState<'easy' | 'medium' | 'hard'>('easy');
   const [questionIndices, setQuestionIndices] = useState({ easy: 0, medium: 0, hard: 0 });
   const [timeLeft, setTimeLeft] = useState(0);
+  const [pendingDifficulty, setPendingDifficulty] = useState<'easy' | 'medium' | 'hard' | null>(null);
 
   React.useEffect(() => {
     if (gameState?.timer.isRunning) {
@@ -105,6 +106,21 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
           revealCorrect: false,
           savedRemainingTime: null,
           savedDuration: null,
+          'timer/isRunning': false,
+          'timer/isPaused': false,
+          'timer/startTime': null,
+          'timer/endTime': null,
+          'timer/remainingTime': 0,
+          'timer/type': null
+        });
+        break;
+      case 'RESET_HOT_SEAT_UI':
+        await update(gameRef, {
+          phase: 'HOT_SEAT',
+          lockedOption: null,
+          revealCorrect: false,
+          activeLifeline: null,
+          crowdSourceVotes: null,
           'timer/isRunning': false,
           'timer/isPaused': false,
           'timer/startTime': null,
@@ -450,7 +466,9 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
                       return b.isCorrect - a.isCorrect;
                     }
                     // Second priority: Time (ascending)
-                    return (a.fffTime || 0) - (b.fffTime || 0);
+                    const timeA = (a.fffTime && a.fffTime < 999999) ? a.fffTime : 999999999;
+                    const timeB = (b.fffTime && b.fffTime < 999999) ? b.fffTime : 999999999;
+                    return timeA - timeB;
                   })
                   .map((team, index) => (
                     <button 
@@ -459,7 +477,9 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
                       className="w-full bg-[#0a0a2a] hover:bg-blue-900/30 p-3 rounded-xl border border-white/5 flex justify-between items-center transition-colors"
                     >
                       <span className="font-bold">{team.name}</span>
-                      <span className="font-mono text-blue-400">{(team.fffTime! / 1000).toFixed(5)}s</span>
+                      <span className="font-mono text-blue-400">
+                        {team.fffTime && isFinite(team.fffTime) && team.fffTime < 999999 ? `${(team.fffTime / 1000).toFixed(3)}s` : '--'}
+                      </span>
                     </button>
                   ))}
                 
@@ -504,7 +524,18 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
             {(['easy', 'medium', 'hard'] as const).map(d => (
               <button 
                 key={d}
-                onClick={() => setSelectedDifficulty(d)}
+                onClick={() => {
+                  if (selectedDifficulty === d) return;
+                  
+                  const isQuestionActive = ['HOT_SEAT_QUESTION', 'HOT_SEAT_OPTIONS', 'CROWD_SOURCE'].includes(gameState?.phase || '');
+                  
+                  if (isQuestionActive) {
+                    setPendingDifficulty(d);
+                  } else {
+                    setSelectedDifficulty(d);
+                    sendAction('RESET_HOT_SEAT_UI');
+                  }
+                }}
                 className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-widest border transition-colors ${selectedDifficulty === d ? 'bg-blue-600 border-blue-400' : 'bg-[#0a0a2a] border-white/10 text-gray-500'}`}
               >
                 {d}
@@ -679,12 +710,52 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
               </div>
               <div className="flex justify-between text-xs text-gray-400">
                 <span>Score: <span className="text-white font-mono">{40 + (team.hotSeatPoints || 0) + (team.bonusPoints || 0)}</span></span>
-                <span>FFF: <span className="text-white font-mono">{team.fffTime ? `${(team.fffTime / 1000).toFixed(5)}s` : '--'}</span></span>
+                <span>FFF: <span className="text-white font-mono">
+                  {team.fffTime && isFinite(team.fffTime) && team.fffTime < 999999 ? `${(team.fffTime / 1000).toFixed(3)}s` : '--'}
+                </span></span>
               </div>
             </div>
           ))}
         </div>
       </section>
+
+      {/* Level Switch Confirmation Modal */}
+      {pendingDifficulty && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/80 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-[#1a1a4a] w-full max-w-md rounded-3xl border border-blue-500/30 p-8 space-y-6 shadow-2xl shadow-blue-500/10">
+            <div className="flex flex-col items-center text-center space-y-4">
+              <div className="w-16 h-16 bg-blue-500/20 rounded-full flex items-center justify-center">
+                <AlertTriangle className="w-8 h-8 text-blue-500" />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-xl font-bold">Switch Difficulty?</h3>
+                <p className="text-gray-400 text-sm">
+                  A question is already active. Switching level will reset the current question. Do you want to continue?
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-col space-y-3">
+              <button 
+                onClick={() => {
+                  setSelectedDifficulty(pendingDifficulty);
+                  sendAction('RESET_HOT_SEAT_UI');
+                  setPendingDifficulty(null);
+                }}
+                className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-bold shadow-lg shadow-blue-600/20 transition-all"
+              >
+                Yes, Switch
+              </button>
+              <button 
+                onClick={() => setPendingDifficulty(null)}
+                className="w-full py-4 bg-white/5 hover:bg-white/10 text-gray-300 rounded-2xl font-bold transition-all"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -114,10 +114,11 @@ const Display: React.FC<DisplayProps> = ({ gameState }) => {
               <table className="w-full text-left">
                 <thead className="bg-blue-900/50 text-blue-300 text-xs uppercase tracking-widest">
                   <tr>
-                    <th className="p-4">Rank</th>
+                    <th className="p-4 w-16">Rank</th>
                     <th className="p-4">Team Name</th>
-                    <th className="p-4">Time (s)</th>
-                    <th className="p-4">Status</th>
+                    <th className="p-4 w-32">Time (s)</th>
+                    <th className="p-4 w-32">Status</th>
+                    <th className="p-4 text-right w-32">Total Points</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
@@ -128,17 +129,17 @@ const Display: React.FC<DisplayProps> = ({ gameState }) => {
                         return b.isCorrect - a.isCorrect;
                       }
                       // Second priority: Time (ascending)
-                      // Treat undefined/null or 999999999 as very slow
-                      const timeA = a.fffTime ?? 999999999;
-                      const timeB = b.fffTime ?? 999999999;
+                      // Treat undefined/null or values >= 999999 as very slow
+                      const timeA = (a.fffTime && a.fffTime < 999999) ? a.fffTime : 999999999;
+                      const timeB = (b.fffTime && b.fffTime < 999999) ? b.fffTime : 999999999;
                       return timeA - timeB;
                     })
                     .map((team, i) => (
                       <tr key={team.id} className={team.isCorrect === 1 ? "bg-green-500/10" : "bg-red-500/10"}>
                         <td className="p-4 font-mono">{i + 1}</td>
-                        <td className="p-4 font-bold">{team.name}</td>
+                        <td className="p-4 font-bold truncate max-w-[200px] md:max-w-none" title={team.name}>{team.name}</td>
                         <td className="p-4 font-mono">
-                          {team.fffTime && team.fffTime < 999999999 ? `${(team.fffTime / 1000).toFixed(3)}s` : "—"}
+                          {team.fffTime && isFinite(team.fffTime) && team.fffTime < 999999 ? `${(team.fffTime / 1000).toFixed(3)}s` : "—"}
                         </td>
                         <td className="p-4">
                           {team.isCorrect === 1 ? (
@@ -146,6 +147,9 @@ const Display: React.FC<DisplayProps> = ({ gameState }) => {
                           ) : (
                             <span className="text-red-400">Incorrect</span>
                           )}
+                        </td>
+                        <td className="p-4 text-right font-mono font-bold text-yellow-500">
+                          {40 + (team.hotSeatPoints || 0) + (team.bonusPoints || 0)}
                         </td>
                       </tr>
                     ))}
