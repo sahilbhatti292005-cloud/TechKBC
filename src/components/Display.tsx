@@ -50,28 +50,31 @@ const Display: React.FC<DisplayProps> = ({ gameState }) => {
             </div>
             <div className="h-2 w-64 bg-red-600 rounded-full animate-pulse" />
           </motion.div>
-        ) : gameState.phase === 'LOBBY' && (
+        ) : !gameState.isTimeOut && gameState.phase === 'LOBBY' && (
           <motion.div 
             key="lobby"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="flex flex-col items-center justify-center space-y-12"
+            className="w-full h-full flex flex-col items-center justify-start space-y-6 pt-4 pb-48"
           >
-            <h1 className="text-6xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-600">
-              COGNOS TAV TECH KBC
-            </h1>
-            <div className="text-2xl font-mono text-blue-300">CYCLE {gameState.cycle} / 10</div>
-            <div className="grid grid-cols-4 gap-4 w-full max-w-4xl">
+            <div className="text-center space-y-1">
+              <h1 className="text-3xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-600">
+                COGNOTSAV TECH KBC
+              </h1>
+              <div className="text-base font-mono text-blue-300 opacity-80 uppercase tracking-widest">Cycle {gameState.cycle} / 10</div>
+            </div>
+            
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-3 w-full px-6 overflow-y-auto max-h-[calc(100vh-280px)] custom-scrollbar">
               {(gameState.teams || []).map((team, i) => (
-                <div key={team.id} className="bg-[#1a1a4a] p-4 rounded-xl border border-white/10 text-center">
-                  <div className="text-xs text-gray-400 mb-1">TEAM {i + 1}</div>
-                  <div className="font-bold truncate">{team.name}</div>
+                <div key={team.id} className="bg-[#1a1a4a]/60 backdrop-blur-sm p-2 rounded-lg border border-white/10 text-center shadow-lg hover:border-blue-500/50 transition-colors">
+                  <div className="text-[8px] text-blue-400 font-bold tracking-widest mb-0.5 uppercase opacity-70">Team {i + 1}</div>
+                  <div className="text-sm font-bold truncate text-white">{team.name}</div>
                 </div>
               ))}
             </div>
           </motion.div>
         )}
 
-        {(gameState.phase === 'FFF_QUESTION' || gameState.phase === 'FFF_OPTIONS') && (
+        {!gameState.isTimeOut && (gameState.phase === 'FFF_QUESTION' || gameState.phase === 'FFF_OPTIONS') && (
           <motion.div 
             key="fff"
             initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
@@ -116,7 +119,7 @@ const Display: React.FC<DisplayProps> = ({ gameState }) => {
           </motion.div>
         )}
 
-        {gameState.phase === 'FFF_RESULT' && (
+        {!gameState.isTimeOut && gameState.phase === 'FFF_RESULT' && (
           <motion.div 
             key="fff_result"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -172,20 +175,39 @@ const Display: React.FC<DisplayProps> = ({ gameState }) => {
           </motion.div>
         )}
 
-        {['HOT_SEAT', 'HOT_SEAT_QUESTION', 'HOT_SEAT_OPTIONS'].includes(gameState.phase) && !gameState.activeLifeline && (
+        {!gameState.isTimeOut && ['HOT_SEAT', 'HOT_SEAT_QUESTION', 'HOT_SEAT_OPTIONS'].includes(gameState.phase) && !gameState.activeLifeline && (
           <motion.div 
             key="hot_seat"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="flex flex-col items-center justify-center w-full"
           >
-            <div className="flex items-center space-x-8 mb-12">
+            <div className="flex items-center space-x-12 mb-12">
               <div className="text-center">
                 <div className="text-xs text-gray-400 uppercase">Current Team</div>
                 <div className="text-3xl font-bold text-blue-400">
                   {gameState.teams.find(t => t.id === gameState.hotSeatTeamId)?.name}
                 </div>
               </div>
-              <div className="h-12 w-px bg-white/20" />
+
+              {gameState.timer.type === 'HOT_SEAT' && (
+                <div className="relative w-28 h-28 flex items-center justify-center">
+                  <svg className="w-full h-full -rotate-90">
+                    <circle cx="56" cy="56" r="52" fill="transparent" stroke="rgba(255,255,255,0.1)" strokeWidth="4" />
+                    <motion.circle 
+                      cx="56" cy="56" r="52" fill="transparent" stroke={timeLeft <= 10 ? "#ef4444" : "#3b82f6"} strokeWidth="4" 
+                      strokeDasharray="326"
+                      animate={{ 
+                        strokeDashoffset: 326 - (326 * Math.min(1, Math.max(0, timeLeft / (gameState.timer.duration / 1000)))) 
+                      }}
+                      transition={{ duration: 1, ease: "linear" }}
+                    />
+                  </svg>
+                  <div className={`absolute text-3xl font-mono font-bold ${timeLeft <= 10 ? 'text-red-500 animate-pulse' : ''}`}>
+                    {timeLeft}
+                  </div>
+                </div>
+              )}
+
               <div className="text-center">
                 <div className="text-xs text-gray-400 uppercase">Current Score</div>
                 <div className="text-3xl font-mono font-bold text-yellow-500">
@@ -195,26 +217,6 @@ const Display: React.FC<DisplayProps> = ({ gameState }) => {
             </div>
 
             <div className="bg-[#1a1a4a] p-12 rounded-3xl border-2 border-blue-500/30 w-full max-w-5xl relative">
-              {gameState.timer.type === 'HOT_SEAT' && (
-                <div className="absolute -top-16 left-1/2 -translate-x-1/2">
-                  <div className="relative w-24 h-24 flex items-center justify-center">
-                    <svg className="w-full h-full -rotate-90">
-                      <circle cx="48" cy="48" r="44" fill="transparent" stroke="rgba(255,255,255,0.1)" strokeWidth="4" />
-                      <motion.circle 
-                        cx="48" cy="48" r="44" fill="transparent" stroke={timeLeft <= 10 ? "#ef4444" : "#3b82f6"} strokeWidth="4" 
-                        strokeDasharray="276"
-                        animate={{ 
-                          strokeDashoffset: 276 - (276 * Math.min(1, Math.max(0, timeLeft / (gameState.timer.duration / 1000)))) 
-                        }}
-                        transition={{ duration: 1, ease: "linear" }}
-                      />
-                    </svg>
-                    <div className={`absolute text-2xl font-mono font-bold ${timeLeft <= 10 ? 'text-red-500 animate-pulse' : ''}`}>
-                      {timeLeft}
-                    </div>
-                  </div>
-                </div>
-              )}
               {gameState.phase === 'HOT_SEAT' ? (
                 <div className="text-center py-12">
                   <h2 className="text-5xl font-black text-white mb-4 uppercase tracking-tighter">Congratulations!</h2>
@@ -278,7 +280,7 @@ const Display: React.FC<DisplayProps> = ({ gameState }) => {
           </motion.div>
         )}
 
-        {gameState.activeLifeline && (
+        {!gameState.isTimeOut && gameState.activeLifeline && (
           <motion.div 
             key="lifeline_logo"
             initial={{ scale: 0.8, opacity: 0 }}
@@ -308,7 +310,7 @@ const Display: React.FC<DisplayProps> = ({ gameState }) => {
           </motion.div>
         )}
 
-        {gameState.phase === 'CROWD_SOURCE' && (
+        {!gameState.isTimeOut && gameState.phase === 'CROWD_SOURCE' && (
           <motion.div 
             key="crowd_source"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -369,7 +371,7 @@ const Display: React.FC<DisplayProps> = ({ gameState }) => {
       </AnimatePresence>
 
       {/* Persistent Leaderboard at the bottom during certain states */}
-      {['LOBBY', 'GAME_OVER', 'FFF_RESULT', 'HOT_SEAT', 'HOT_SEAT_QUESTION', 'HOT_SEAT_OPTIONS'].includes(gameState.phase) && gameState.showBottomLeaderboard && (
+      {!gameState.isTimeOut && ['LOBBY', 'GAME_OVER', 'FFF_RESULT', 'HOT_SEAT', 'HOT_SEAT_QUESTION', 'HOT_SEAT_OPTIONS'].includes(gameState.phase) && gameState.showBottomLeaderboard && (
         <div className="fixed bottom-8 left-8 right-8">
           <div className="bg-[#1a1a4a]/80 backdrop-blur-xl p-6 rounded-3xl border border-white/10">
             <h3 className="text-xl font-bold mb-4 flex items-center"><Trophy className="mr-2 text-yellow-500" /> Live Leaderboard</h3>

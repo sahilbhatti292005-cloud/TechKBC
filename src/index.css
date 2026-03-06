@@ -20,6 +20,11 @@
   .kbc-card {
     @apply bg-[#1a1a4a]/80 backdrop-blur-md border border-white/10 rounded-3xl shadow-2xl;
   }
+
+  .custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: #1e3a8a #0a0a2a;
+  }
 }
 
 /* Custom Scrollbar */
