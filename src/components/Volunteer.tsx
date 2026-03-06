@@ -199,7 +199,7 @@ const Volunteer: React.FC<VolunteerProps> = ({ gameState, teamId }) => {
             className="flex-1 flex flex-col"
           >
             <div className="flex justify-between items-center mb-8">
-              <h2 className="text-2xl font-bold flex items-center"><Vote className="mr-3 text-blue-400" /> Audience Poll</h2>
+              <h2 className="text-2xl font-bold flex items-center"><Vote className="mr-3 text-blue-400" /> Crowd Source</h2>
               <div className={`text-2xl font-mono font-bold ${timeLeft <= 5 ? 'text-red-500 animate-pulse' : 'text-blue-400'}`}>
                 {timeLeft}s
               </div>

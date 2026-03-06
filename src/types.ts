@@ -60,6 +60,7 @@ export interface GameState {
   savedDuration?: number | null;
   showBottomLeaderboard: boolean;
   fffSubmissions?: Record<string, any>;
+  isTimeOut: boolean;
 }
 
 export type Role = 'admin_laptop' | 'admin_mobile' | 'volunteer' | 'display';

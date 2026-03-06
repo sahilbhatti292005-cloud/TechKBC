@@ -186,9 +186,34 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
           'timer/type': null
         });
         break;
-      case 'LOCK_OPTION':
-        await update(gameRef, { lockedOption: payload.optionIndex });
+      case 'LOCK_OPTION': {
+        if (!gameState) return;
+        const isCurrentlyLocked = gameState.lockedOption === payload.optionIndex;
+        
+        if (isCurrentlyLocked) {
+          // Unlock and resume timer
+          await update(gameRef, { 
+            lockedOption: null,
+            'timer/isRunning': true,
+            'timer/isPaused': false,
+            'timer/startTime': Date.now(),
+            'timer/endTime': Date.now() + (gameState.timer.remainingTime || 0)
+          });
+        } else {
+          // Lock and pause timer
+          const remaining = gameState.timer.isRunning 
+            ? Math.max(0, (gameState.timer.endTime || 0) - Date.now()) 
+            : gameState.timer.remainingTime;
+            
+          await update(gameRef, { 
+            lockedOption: payload.optionIndex,
+            'timer/isRunning': false,
+            'timer/isPaused': true,
+            'timer/remainingTime': remaining
+          });
+        }
         break;
+      }
       case 'REVEAL_CORRECT':
         await update(gameRef, {
           revealCorrect: true,
@@ -307,6 +332,34 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
         });
         break;
       }
+      case 'TOGGLE_TIME_OUT': {
+        if (!gameState) return;
+        const newTimeOutState = !gameState.isTimeOut;
+        
+        if (newTimeOutState) {
+          // Entering Time Out: Pause timer
+          const remaining = gameState.timer.isRunning 
+            ? Math.max(0, (gameState.timer.endTime || 0) - Date.now()) 
+            : gameState.timer.remainingTime;
+            
+          await update(gameRef, { 
+            isTimeOut: true,
+            'timer/isRunning': false,
+            'timer/isPaused': true,
+            'timer/remainingTime': remaining
+          });
+        } else {
+          // Exiting Time Out: Resume timer
+          await update(gameRef, { 
+            isTimeOut: false,
+            'timer/isRunning': true,
+            'timer/isPaused': false,
+            'timer/startTime': Date.now(),
+            'timer/endTime': Date.now() + (gameState.timer.remainingTime || 0)
+          });
+        }
+        break;
+      }
       case 'RESET_GAME':
         await set(gameRef, {
           phase: 'LOBBY',
@@ -322,6 +375,7 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
           savedDuration: null,
           lockedOption: null,
           revealCorrect: false,
+          isTimeOut: false,
           timer: {
             duration: 0,
             startTime: null,
@@ -519,7 +573,15 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
 
         {/* Hot Seat Controls */}
         <section className="bg-[#1a1a4a] p-6 rounded-2xl border border-white/10 space-y-6">
-          <h2 className="text-xl font-bold flex items-center"><UserCheck className="mr-2 text-blue-500" /> Hot Seat Control</h2>
+          <div className="flex justify-between items-center">
+            <h2 className="text-xl font-bold flex items-center"><UserCheck className="mr-2 text-blue-500" /> Hot Seat Control</h2>
+            <button 
+              onClick={() => sendAction('TOGGLE_TIME_OUT')}
+              className={`px-4 py-2 rounded-xl font-bold text-sm transition-all border-2 ${gameState.isTimeOut ? 'bg-red-600 border-red-400 text-white shadow-[0_0_15px_rgba(239,68,68,0.4)]' : 'bg-red-600/10 border-red-500/30 text-red-500 hover:bg-red-600/20'}`}
+            >
+              {gameState.isTimeOut ? 'EXIT TIME OUT' : 'TIME OUT'}
+            </button>
+          </div>
           <div className="flex space-x-2 mb-4">
             {(['easy', 'medium', 'hard'] as const).map(d => (
               <button 

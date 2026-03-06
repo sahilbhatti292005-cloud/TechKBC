@@ -35,13 +35,26 @@ const Display: React.FC<DisplayProps> = ({ gameState }) => {
   );
 
   return (
-    <div className="min-h-screen bg-[#0a0a2a] text-white p-8 font-sans overflow-hidden">
+    <div className="h-screen w-screen bg-[#0a0a2a] text-white p-12 font-sans overflow-hidden flex flex-col items-center justify-center relative">
       <AnimatePresence mode="wait">
-        {gameState.phase === 'LOBBY' && (
+        {gameState.isTimeOut ? (
+          <motion.div
+            key="timeout"
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 1.2 }}
+            className="flex flex-col items-center justify-center space-y-4"
+          >
+            <div className="text-[12rem] font-black text-red-600 tracking-tighter leading-none drop-shadow-[0_0_50px_rgba(220,38,38,0.5)]">
+              TIME OUT
+            </div>
+            <div className="h-2 w-64 bg-red-600 rounded-full animate-pulse" />
+          </motion.div>
+        ) : gameState.phase === 'LOBBY' && (
           <motion.div 
             key="lobby"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="h-full flex flex-col items-center justify-center space-y-8"
+            className="flex flex-col items-center justify-center space-y-12"
           >
             <h1 className="text-6xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-600">
               COGNOS TAV TECH KBC
@@ -62,7 +75,7 @@ const Display: React.FC<DisplayProps> = ({ gameState }) => {
           <motion.div 
             key="fff"
             initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
-            className="h-full flex flex-col items-center justify-center"
+            className="flex flex-col items-center justify-center w-full"
           >
             <div className="text-blue-400 text-sm uppercase tracking-widest mb-4">Fastest Finger First</div>
             <h2 className="text-4xl font-bold text-center mb-12 max-w-4xl">{gameState.currentQuestion?.text}</h2>
@@ -107,7 +120,7 @@ const Display: React.FC<DisplayProps> = ({ gameState }) => {
           <motion.div 
             key="fff_result"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="w-full max-w-6xl mx-auto"
+            className="w-full max-w-6xl flex flex-col items-center justify-center"
           >
             <h2 className="text-3xl font-bold text-center mb-8">Fastest Finger Results</h2>
             <div className="bg-[#1a1a4a] rounded-3xl border border-white/10 overflow-hidden">
@@ -163,7 +176,7 @@ const Display: React.FC<DisplayProps> = ({ gameState }) => {
           <motion.div 
             key="hot_seat"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="h-full flex flex-col items-center justify-center"
+            className="flex flex-col items-center justify-center w-full"
           >
             <div className="flex items-center space-x-8 mb-12">
               <div className="text-center">
@@ -271,7 +284,7 @@ const Display: React.FC<DisplayProps> = ({ gameState }) => {
             initial={{ scale: 0.8, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.8, opacity: 0 }}
-            className="h-full flex flex-col items-center justify-center space-y-12"
+            className="flex flex-col items-center justify-center space-y-12 w-full"
           >
             <div className="p-20 bg-blue-600/10 rounded-full border-8 border-blue-500/50 shadow-[0_0_80px_rgba(59,130,246,0.3)] relative">
               <motion.div 
@@ -299,10 +312,10 @@ const Display: React.FC<DisplayProps> = ({ gameState }) => {
           <motion.div 
             key="crowd_source"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="h-full flex flex-col items-center justify-center w-full max-w-4xl mx-auto"
+            className="flex flex-col items-center justify-center w-full max-w-4xl"
           >
             <div className="flex justify-between items-center w-full mb-12">
-              <h2 className="text-4xl font-bold flex items-center"><Users className="mr-4 w-10 h-10 text-blue-400" /> Audience Poll</h2>
+              <h2 className="text-4xl font-bold flex items-center"><Users className="mr-4 w-10 h-10 text-blue-400" /> Crowd Source</h2>
               {timeLeft > 0 && (
                 <div className="bg-blue-600/20 px-6 py-2 rounded-2xl border border-blue-500/50 flex items-center space-x-4">
                   <Timer className="w-8 h-8 text-blue-400 animate-pulse" />
@@ -321,10 +334,16 @@ const Display: React.FC<DisplayProps> = ({ gameState }) => {
                 </div>
               )}
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={Object.entries(gameState.crowdSourceVotes).map(([name, value]) => ({ name, value }))}>
+                <BarChart 
+                  data={Object.entries(gameState.crowdSourceVotes).map(([name, value]) => {
+                    const total = Object.values(gameState.crowdSourceVotes).reduce((a, b) => (a as number) + (b as number), 0) as number;
+                    const percent = total === 0 ? 0 : ((value as number) / total) * 100;
+                    return { name, value: percent };
+                  })}
+                >
                   <XAxis dataKey="name" stroke="#94a3b8" />
-                  <YAxis hide />
-                  <Bar dataKey="value" radius={[10, 10, 0, 0]}>
+                  <YAxis hide domain={[0, 100]} />
+                  <Bar dataKey="value" radius={[10, 10, 0, 0]} isAnimationActive={true}>
                     {Object.entries(gameState.crowdSourceVotes).map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={index % 2 === 0 ? '#3b82f6' : '#8b5cf6'} />
                     ))}

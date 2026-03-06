@@ -17,9 +17,34 @@ const AdminMobile: React.FC<AdminMobileProps> = ({ gameState }) => {
     const gameRef = ref(db, 'gameState');
 
     switch (action) {
-      case 'LOCK_OPTION':
-        await update(gameRef, { lockedOption: payload.optionIndex });
+      case 'LOCK_OPTION': {
+        if (!gameState) return;
+        const isCurrentlyLocked = gameState.lockedOption === payload.optionIndex;
+        
+        if (isCurrentlyLocked) {
+          // Unlock and resume timer
+          await update(gameRef, { 
+            lockedOption: null,
+            'timer/isRunning': true,
+            'timer/isPaused': false,
+            'timer/startTime': Date.now(),
+            'timer/endTime': Date.now() + (gameState.timer.remainingTime || 0)
+          });
+        } else {
+          // Lock and pause timer
+          const remaining = gameState.timer.isRunning 
+            ? Math.max(0, (gameState.timer.endTime || 0) - Date.now()) 
+            : gameState.timer.remainingTime;
+            
+          await update(gameRef, { 
+            lockedOption: payload.optionIndex,
+            'timer/isRunning': false,
+            'timer/isPaused': true,
+            'timer/remainingTime': remaining
+          });
+        }
         break;
+      }
       case 'UPDATE_SCORE':
         const team = gameState.teams.find(t => t.id === payload.teamId);
         if (team) {
