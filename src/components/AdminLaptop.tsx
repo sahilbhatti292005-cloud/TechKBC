@@ -129,6 +129,7 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
         await update(gameRef, {
           phase: 'HOT_SEAT',
           hotSeatTeamId: payload.teamId,
+          showBottomLeaderboard: false,
           lifelines: { debugHelp: false, callDev: false, crowdSource: false },
           lockedOption: null,
           revealCorrect: false,
@@ -365,10 +366,10 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
         await update(gameRef, {
           phase: callOriginalPhase,
           activeLifeline: null,
-          'timer/isRunning': false,
-          'timer/isPaused': true,
-          'timer/startTime': null,
-          'timer/endTime': null,
+          'timer/isRunning': true,
+          'timer/isPaused': false,
+          'timer/startTime': Date.now(),
+          'timer/endTime': Date.now() + callRemaining,
           'timer/remainingTime': callRemaining,
           'timer/duration': callOriginalDuration,
           savedRemainingTime: null,
@@ -876,15 +877,15 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
               </motion.button>
             )}
 
-            {gameState.activeLifeline === 'callDev' && gameState.phase !== 'CALL_DEV' && (
+            {gameState.activeLifeline === 'callDev' && (
               <motion.button
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
-                onClick={() => sendAction('START_CALL_TIMER')}
-                className="w-full bg-orange-500 hover:bg-orange-600 text-white py-2 rounded-lg text-sm font-bold shadow-lg shadow-orange-500/20 flex items-center justify-center space-x-2"
+                onClick={() => sendAction(gameState.phase === 'CALL_DEV' ? 'END_CALL_LIFELINE' : 'START_CALL_TIMER')}
+                className={`w-full ${gameState.phase === 'CALL_DEV' ? 'bg-red-500 hover:bg-red-600 shadow-red-500/20' : 'bg-orange-500 hover:bg-orange-600 shadow-orange-500/20'} text-white py-2 rounded-lg text-sm font-bold shadow-lg flex items-center justify-center space-x-2`}
               >
                 <Phone className="w-4 h-4" />
-                <span>START CALL TIMER (60s)</span>
+                <span>{gameState.phase === 'CALL_DEV' ? 'END CALL DEV LIFELINE' : 'START CALL TIMER (60s)'}</span>
               </motion.button>
             )}
 
