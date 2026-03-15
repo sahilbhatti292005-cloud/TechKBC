@@ -35,7 +35,7 @@ const Display: React.FC<DisplayProps> = ({ gameState }) => {
   );
 
   return (
-    <div className="h-screen w-screen bg-[#0a0a2a] text-white p-12 font-sans overflow-hidden flex flex-col items-center justify-center relative">
+    <div className={`h-screen w-screen bg-[#0a0a2a] text-white p-12 font-sans overflow-hidden flex flex-col items-center relative ${gameState.phase === 'FFF_RESULT' ? 'justify-start pt-20' : 'justify-center'}`}>
       <AnimatePresence mode="wait">
         {gameState.isTimeOut ? (
           <motion.div
@@ -122,55 +122,73 @@ const Display: React.FC<DisplayProps> = ({ gameState }) => {
         {!gameState.isTimeOut && gameState.phase === 'FFF_RESULT' && (
           <motion.div 
             key="fff_result"
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="w-full max-w-6xl flex flex-col items-center justify-center"
+            initial={{ opacity: 0, y: 20 }} 
+            animate={{ opacity: 1, y: 0 }} 
+            exit={{ opacity: 0, y: -20 }}
+            className="w-full max-w-[1200px] px-8 flex flex-col items-center"
           >
-            <h2 className="text-3xl font-bold text-center mb-8">Fastest Finger Results</h2>
-            <div className="bg-[#1a1a4a] rounded-3xl border border-white/10 overflow-hidden">
-              <table className="w-full text-left">
-                <thead className="bg-blue-900/50 text-blue-300 text-xs uppercase tracking-widest">
-                  <tr>
-                    <th className="p-4 w-16">Rank</th>
-                    <th className="p-4">Team Name</th>
-                    <th className="p-4 w-32">Time (s)</th>
-                    <th className="p-4 w-32">Status</th>
-                    <th className="p-4 text-right w-32">Total Points</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {(gameState.teams || [])
-                    .sort((a, b) => {
-                      // First priority: Correctness (1 comes before 0)
-                      if (a.isCorrect !== b.isCorrect) {
-                        return b.isCorrect - a.isCorrect;
-                      }
-                      // Second priority: Time (ascending)
-                      // Treat undefined/null or values >= 999999 as very slow
-                      const timeA = (a.fffTime && a.fffTime < 999999) ? a.fffTime : 999999999;
-                      const timeB = (b.fffTime && b.fffTime < 999999) ? b.fffTime : 999999999;
-                      return timeA - timeB;
-                    })
-                    .map((team, i) => (
-                      <tr key={team.id} className={team.isCorrect === 1 ? "bg-green-500/10" : "bg-red-500/10"}>
-                        <td className="p-4 font-mono">{i + 1}</td>
-                        <td className="p-4 font-bold truncate max-w-[200px] md:max-w-none" title={team.name}>{team.name}</td>
-                        <td className="p-4 font-mono">
-                          {team.fffTime && isFinite(team.fffTime) && team.fffTime < 999999 ? `${(team.fffTime / 1000).toFixed(3)}s` : "—"}
-                        </td>
-                        <td className="p-4">
-                          {team.isCorrect === 1 ? (
-                            <span className="text-green-400 flex items-center"><Trophy className="w-4 h-4 mr-1" /> Correct</span>
-                          ) : (
-                            <span className="text-red-400">Incorrect</span>
-                          )}
-                        </td>
-                        <td className="p-4 text-right font-mono font-bold text-yellow-500">
-                          {40 + (team.hotSeatPoints || 0) + (team.bonusPoints || 0)}
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
+            <h2 className="text-5xl font-black text-center mb-12 tracking-tight text-white">
+              Fastest Finger Results
+            </h2>
+            
+            <div className="w-full bg-[#15153a] rounded-2xl shadow-2xl overflow-hidden border border-white/5">
+              {/* Header */}
+              <div className="flex items-center h-[60px] px-[30px] bg-[#1e1e4a] text-blue-300 text-[11px] font-bold uppercase tracking-widest border-b border-white/5">
+                <div className="w-[80px] text-center">Rank</div>
+                <div className="flex-1 text-left ml-4">Team Name</div>
+                <div className="w-[140px] text-center">Time (s)</div>
+                <div className="w-[150px] text-center">Status</div>
+                <div className="w-[140px] text-right">Total Points</div>
+              </div>
+
+              {/* Rows */}
+              <div className="divide-y divide-white/5">
+                {(gameState.teams || [])
+                  .sort((a, b) => {
+                    // First priority: Correctness (1 comes before 0)
+                    if (a.isCorrect !== b.isCorrect) {
+                      return b.isCorrect - a.isCorrect;
+                    }
+                    // Second priority: Time (ascending)
+                    const timeA = (a.fffTime && a.fffTime < 999999) ? a.fffTime : 999999999;
+                    const timeB = (b.fffTime && b.fffTime < 999999) ? b.fffTime : 999999999;
+                    return timeA - timeB;
+                  })
+                  .map((team, i) => (
+                    <div 
+                      key={team.id} 
+                      className={`flex items-center h-[65px] px-[30px] transition-colors hover:bg-white/5 ${
+                        i % 2 === 0 ? 'bg-white/[0.02]' : 'bg-transparent'
+                      }`}
+                    >
+                      <div className="w-[80px] text-center font-mono text-gray-400">
+                        {i + 1}
+                      </div>
+                      <div className="flex-1 text-left ml-4 font-bold text-lg truncate text-white">
+                        {team.name}
+                      </div>
+                      <div className="w-[140px] text-center font-mono text-blue-400">
+                        {team.fffTime && isFinite(team.fffTime) && team.fffTime < 999999 
+                          ? `${(team.fffTime / 1000).toFixed(3)}s` 
+                          : "—"}
+                      </div>
+                      <div className="w-[150px] flex justify-center">
+                        {team.isCorrect === 1 ? (
+                          <div className="bg-green-500/20 text-green-400 px-3 py-1 rounded-full text-xs font-bold flex items-center border border-green-500/30">
+                            <Trophy className="w-3 h-3 mr-1" /> Correct
+                          </div>
+                        ) : (
+                          <div className="bg-red-500/20 text-red-400 px-3 py-1 rounded-full text-xs font-bold border border-red-500/30">
+                            Incorrect
+                          </div>
+                        )}
+                      </div>
+                      <div className="w-[140px] text-right font-mono font-bold text-xl text-yellow-500">
+                        {40 + (team.hotSeatPoints || 0) + (team.bonusPoints || 0)}
+                      </div>
+                    </div>
+                  ))}
+              </div>
             </div>
           </motion.div>
         )}
