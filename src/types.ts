@@ -7,6 +7,7 @@ export type GamePhase =
   | 'HOT_SEAT_OPTIONS' 
   | 'HOT_SEAT' 
   | 'CROWD_SOURCE' 
+  | 'CALL_DEV'
   | 'GAME_OVER';
 
 export interface Team {
@@ -61,8 +62,10 @@ export interface GameState {
   revealCorrect: boolean;
   crowdSourceVotes: Record<string, number>;
   activeLifeline: 'debugHelp' | 'callDev' | 'crowdSource' | null;
+  removedOptions?: number[] | null;
   savedRemainingTime?: number | null;
   savedDuration?: number | null;
+  savedPhase?: GamePhase | null;
   showBottomLeaderboard: boolean;
   fffSubmissions?: Record<string, any>;
   isTimeOut: boolean;

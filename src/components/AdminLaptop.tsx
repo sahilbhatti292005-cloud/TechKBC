@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { GameState } from '../types';
 import { FFF_QUESTION_SETS, HOT_SEAT_QUESTIONS } from '../constants';
-import { Play, Eye, Lock, Trophy, UserCheck, RefreshCw, CheckCircle, XCircle, Zap, Pause, Square, Users, AlertTriangle } from 'lucide-react';
+import { Play, Eye, Lock, Trophy, UserCheck, RefreshCw, CheckCircle, XCircle, Zap, Pause, Square, Users, AlertTriangle, Split, Phone } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { ref, update, set, remove } from 'firebase/database';
 
@@ -21,6 +21,12 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
       const interval = setInterval(() => {
         const remaining = Math.max(0, (gameState.timer.endTime || 0) - Date.now());
         setTimeLeft(Math.ceil(remaining / 1000));
+        
+        // Auto-end call timer
+        if (gameState.phase === 'CALL_DEV' && remaining === 0) {
+          sendAction('END_CALL_LIFELINE');
+        }
+        
         if (remaining === 0) clearInterval(interval);
       }, 100);
       return () => clearInterval(interval);
@@ -45,6 +51,7 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
           fffSubmissions: null,
           lockedOption: null,
           revealCorrect: false,
+          removedOptions: null,
           showBottomLeaderboard: true,
           'timer/isRunning': false,
           'timer/isPaused': false,
@@ -72,6 +79,7 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
           fffSubmissions: null,
           lockedOption: null,
           revealCorrect: false,
+          removedOptions: null,
           'timer/isRunning': false,
           'timer/isPaused': false,
           'timer/startTime': null,
@@ -141,6 +149,7 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
           currentQuestionId: payload.question.id,
           lockedOption: null,
           revealCorrect: false,
+          removedOptions: null,
           savedRemainingTime: null,
           savedDuration: null,
           'timer/isRunning': false,
@@ -158,6 +167,7 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
           phase: 'HOT_SEAT',
           lockedOption: null,
           revealCorrect: false,
+          removedOptions: null,
           activeLifeline: null,
           crowdSourceVotes: null,
           'timer/isRunning': false,
@@ -316,9 +326,11 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
         await update(gameRef, {
           phase: 'CROWD_SOURCE',
           activeLifeline: null,
+          removedOptions: null,
           crowdSourceVotes: { A: 0, B: 0, C: 0, D: 0 },
           savedRemainingTime: gameState.timer.remainingTime,
           savedDuration: gameState.timer.duration,
+          savedPhase: gameState.phase,
           'timer/duration': votingDuration,
           'timer/startTime': Date.now(),
           'timer/endTime': Date.now() + votingDuration,
@@ -328,12 +340,49 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
           'timer/type': 'HOT_SEAT'
         });
         break;
+      case 'START_CALL_TIMER':
+        if (!gameState) return;
+        const callDuration = 60000;
+        await update(gameRef, {
+          phase: 'CALL_DEV',
+          savedRemainingTime: gameState.timer.remainingTime,
+          savedDuration: gameState.timer.duration,
+          savedPhase: gameState.phase,
+          'timer/duration': callDuration,
+          'timer/startTime': Date.now(),
+          'timer/endTime': Date.now() + callDuration,
+          'timer/remainingTime': callDuration,
+          'timer/isRunning': true,
+          'timer/isPaused': false,
+          'timer/type': 'HOT_SEAT'
+        });
+        break;
+      case 'END_CALL_LIFELINE':
+        if (!gameState) return;
+        const callRemaining = gameState.savedRemainingTime || 0;
+        const callOriginalDuration = gameState.savedDuration || 30000;
+        const callOriginalPhase = gameState.savedPhase || 'HOT_SEAT_OPTIONS';
+        await update(gameRef, {
+          phase: callOriginalPhase,
+          activeLifeline: null,
+          'timer/isRunning': false,
+          'timer/isPaused': true,
+          'timer/startTime': null,
+          'timer/endTime': null,
+          'timer/remainingTime': callRemaining,
+          'timer/duration': callOriginalDuration,
+          savedRemainingTime: null,
+          savedDuration: null,
+          savedPhase: null
+        });
+        break;
       case 'RESUME_QUESTION': {
         if (!gameState) return;
         const remaining = gameState.savedRemainingTime || 0;
         const originalDuration = gameState.savedDuration || 30000;
+        const originalPhase = gameState.savedPhase || 'HOT_SEAT_OPTIONS';
         await update(gameRef, {
-          phase: 'HOT_SEAT_OPTIONS',
+          phase: originalPhase,
           'timer/isRunning': true,
           'timer/isPaused': false,
           'timer/startTime': Date.now(),
@@ -341,7 +390,8 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
           'timer/remainingTime': remaining,
           'timer/duration': originalDuration,
           savedRemainingTime: null,
-          savedDuration: null
+          savedDuration: null,
+          savedPhase: null
         });
         break;
       }
@@ -362,6 +412,7 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
           currentQuestionId: newQuestion.id,
           lockedOption: null,
           revealCorrect: false,
+          removedOptions: null,
           'timer/isRunning': false,
           'timer/isPaused': false,
           'timer/startTime': null,
@@ -369,6 +420,28 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
           'timer/remainingTime': duration,
           'timer/duration': duration,
           'timer/type': 'HOT_SEAT'
+        });
+        break;
+      }
+      case 'REMOVE_INCORRECT_OPTIONS': {
+        if (!gameState || !gameState.currentQuestion) return;
+        
+        const correctIndex = gameState.currentQuestion.correctIndex;
+        if (correctIndex === undefined) return;
+
+        const incorrectIndices = [0, 1, 2, 3].filter(i => i !== correctIndex);
+        
+        // Pick 2 random incorrect indices
+        const shuffled = [...incorrectIndices].sort(() => Math.random() - 0.5);
+        const removed = shuffled.slice(0, 2);
+
+        await update(gameRef, {
+          activeLifeline: null,
+          removedOptions: removed,
+          'timer/isRunning': true,
+          'timer/isPaused': false,
+          'timer/startTime': Date.now(),
+          'timer/endTime': Date.now() + gameState.timer.remainingTime
         });
         break;
       }
@@ -413,8 +486,10 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
           showBottomLeaderboard: true,
           savedRemainingTime: null,
           savedDuration: null,
+          savedPhase: null,
           lockedOption: null,
           revealCorrect: false,
+          removedOptions: null,
           isTimeOut: false,
           timer: {
             duration: 0,
@@ -730,15 +805,19 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
             <div className="bg-[#0a0a2a] p-4 rounded-2xl border border-white/10 flex flex-col space-y-2">
               <span className="text-[10px] font-bold text-gray-500 uppercase text-center">Lock Option</span>
               <div className="grid grid-cols-4 gap-1">
-                {['A', 'B', 'C', 'D'].map((opt, i) => (
-                  <button 
-                    key={opt}
-                    onClick={() => sendAction('LOCK_OPTION', { optionIndex: i })}
-                    className={`py-2 rounded-lg text-xs font-bold border transition-all ${gameState.lockedOption === i ? 'bg-yellow-600 border-yellow-400 text-white' : 'bg-[#1a1a4a] border-white/10 text-gray-400'}`}
-                  >
-                    {opt}
-                  </button>
-                ))}
+                {['A', 'B', 'C', 'D'].map((opt, i) => {
+                  const isRemoved = gameState.removedOptions?.includes(i);
+                  return (
+                    <button 
+                      key={opt}
+                      disabled={isRemoved}
+                      onClick={() => sendAction('LOCK_OPTION', { optionIndex: i })}
+                      className={`py-2 rounded-lg text-xs font-bold border transition-all ${isRemoved ? 'opacity-0 pointer-events-none' : gameState.lockedOption === i ? 'bg-yellow-600 border-yellow-400 text-white' : 'bg-[#1a1a4a] border-white/10 text-gray-400'}`}
+                    >
+                      {opt}
+                    </button>
+                  );
+                })}
               </div>
             </div>
             <AdminButton 
@@ -763,25 +842,52 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
           <div className="mt-6 flex flex-col space-y-4">
             <div className="grid grid-cols-3 gap-4">
               <button 
+                disabled={gameState.lifelines.debugHelp && gameState.activeLifeline !== 'debugHelp'}
                 onClick={() => sendAction('ACTIVATE_LIFELINE', { lifeline: 'debugHelp' })} 
-                className={`p-3 rounded-xl text-xs font-bold border transition-all ${gameState.activeLifeline === 'debugHelp' ? 'bg-purple-600 border-purple-400 text-white' : 'bg-purple-600/20 hover:bg-purple-600/40 border-purple-500/50 text-purple-100'}`}
+                className={`p-3 rounded-xl text-xs font-bold border transition-all ${gameState.lifelines.debugHelp && gameState.activeLifeline !== 'debugHelp' ? 'opacity-50 cursor-not-allowed grayscale' : gameState.activeLifeline === 'debugHelp' ? 'bg-purple-600 border-purple-400 text-white' : 'bg-purple-600/20 hover:bg-purple-600/40 border-purple-500/50 text-purple-100'}`}
               >
                 DEBUG HELP (-20)
               </button>
               <button 
+                disabled={gameState.lifelines.callDev && gameState.activeLifeline !== 'callDev'}
                 onClick={() => sendAction('ACTIVATE_LIFELINE', { lifeline: 'callDev' })} 
-                className={`p-3 rounded-xl text-xs font-bold border transition-all ${gameState.activeLifeline === 'callDev' ? 'bg-orange-600 border-orange-400 text-white' : 'bg-orange-600/20 hover:bg-orange-600/40 border-orange-500/50 text-orange-100'}`}
+                className={`p-3 rounded-xl text-xs font-bold border transition-all ${gameState.lifelines.callDev && gameState.activeLifeline !== 'callDev' ? 'opacity-50 cursor-not-allowed grayscale' : gameState.activeLifeline === 'callDev' ? 'bg-orange-600 border-orange-400 text-white' : 'bg-orange-600/20 hover:bg-orange-600/40 border-orange-500/50 text-orange-100'}`}
               >
                 CALL DEV (-10)
               </button>
               <button 
+                disabled={gameState.lifelines.crowdSource && gameState.activeLifeline !== 'crowdSource' && gameState.phase !== 'CROWD_SOURCE'}
                 onClick={() => sendAction('ACTIVATE_LIFELINE', { lifeline: 'crowdSource' })} 
-                className={`p-3 rounded-xl text-xs font-bold border transition-all ${gameState.activeLifeline === 'crowdSource' || gameState.phase === 'CROWD_SOURCE' ? 'bg-blue-600 border-blue-400 text-white' : 'bg-blue-600/20 hover:bg-blue-600/40 border-blue-500/50 text-blue-100'}`}
+                className={`p-3 rounded-xl text-xs font-bold border transition-all ${gameState.lifelines.crowdSource && gameState.activeLifeline !== 'crowdSource' && gameState.phase !== 'CROWD_SOURCE' ? 'opacity-50 cursor-not-allowed grayscale' : gameState.activeLifeline === 'crowdSource' || gameState.phase === 'CROWD_SOURCE' ? 'bg-blue-600 border-blue-400 text-white' : 'bg-blue-600/20 hover:bg-blue-600/40 border-blue-500/50 text-blue-100'}`}
               >
                 CROWDSOURCE (-5)
               </button>
             </div>
             
+            {gameState.activeLifeline === 'debugHelp' && (
+              <motion.button
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                onClick={() => sendAction('REMOVE_INCORRECT_OPTIONS')}
+                className="w-full bg-purple-500 hover:bg-purple-600 text-white py-2 rounded-lg text-sm font-bold shadow-lg shadow-purple-500/20 flex items-center justify-center space-x-2"
+              >
+                <Split className="w-4 h-4" />
+                <span>REMOVE INCORRECT OPTIONS</span>
+              </motion.button>
+            )}
+
+            {gameState.activeLifeline === 'callDev' && gameState.phase !== 'CALL_DEV' && (
+              <motion.button
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                onClick={() => sendAction('START_CALL_TIMER')}
+                className="w-full bg-orange-500 hover:bg-orange-600 text-white py-2 rounded-lg text-sm font-bold shadow-lg shadow-orange-500/20 flex items-center justify-center space-x-2"
+              >
+                <Phone className="w-4 h-4" />
+                <span>START CALL TIMER (60s)</span>
+              </motion.button>
+            )}
+
             {gameState.activeLifeline === 'crowdSource' && gameState.phase !== 'CROWD_SOURCE' && (
               <motion.button
                 initial={{ opacity: 0, y: -10 }}

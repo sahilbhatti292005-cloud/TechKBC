@@ -248,6 +248,9 @@ const Display: React.FC<DisplayProps> = ({ gameState }) => {
                   {gameState.phase !== 'HOT_SEAT_QUESTION' && (
                     <div className="grid grid-cols-2 gap-6">
                       {gameState.currentQuestion?.options.map((opt, i) => {
+                        const isRemoved = gameState.removedOptions?.includes(i);
+                        if (isRemoved) return <div key={i} className="p-6 rounded-2xl border border-transparent opacity-0" />;
+                        
                         const isLocked = gameState.lockedOption === i;
                         const isCorrect = gameState.currentQuestion?.correctIndex === i;
                         const showReveal = gameState.revealCorrect;
@@ -298,7 +301,7 @@ const Display: React.FC<DisplayProps> = ({ gameState }) => {
           </motion.div>
         )}
 
-        {!gameState.isTimeOut && gameState.activeLifeline && (
+        {!gameState.isTimeOut && gameState.activeLifeline && gameState.phase !== 'CALL_DEV' && (
           <motion.div 
             key="lifeline_logo"
             initial={{ scale: 0.8, opacity: 0 }}
@@ -324,6 +327,29 @@ const Display: React.FC<DisplayProps> = ({ gameState }) => {
               <div className="inline-block px-6 py-2 bg-blue-500/20 border border-blue-500/30 rounded-full text-blue-400 font-bold tracking-widest uppercase text-sm animate-pulse">
                 Lifeline Active
               </div>
+            </div>
+          </motion.div>
+        )}
+
+        {!gameState.isTimeOut && gameState.phase === 'CALL_DEV' && (
+          <motion.div 
+            key="call_dev_timer"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="flex flex-col items-center justify-center w-full max-w-4xl"
+          >
+            <div className="flex justify-between items-center w-full mb-12">
+              <h2 className="text-4xl font-bold flex items-center"><Phone className="mr-4 w-10 h-10 text-orange-400" /> Call Dev</h2>
+              {timeLeft > 0 && (
+                <div className="bg-orange-600/20 px-6 py-2 rounded-2xl border border-orange-500/50 flex items-center space-x-4">
+                  <Timer className="w-8 h-8 text-orange-400 animate-pulse" />
+                  <span className="text-4xl font-mono font-bold text-orange-400">{timeLeft}s</span>
+                </div>
+              )}
+            </div>
+            
+            <div className="flex flex-col items-center justify-center space-y-8 p-12 bg-[#1a1a4a] rounded-3xl border border-white/10 w-full">
+               <Phone className="w-32 h-32 text-orange-400 animate-bounce" />
+               <p className="text-2xl text-center text-gray-400">Calling the developer...</p>
             </div>
           </motion.div>
         )}
