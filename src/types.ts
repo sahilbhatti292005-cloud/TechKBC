@@ -28,6 +28,11 @@ export interface Question {
   difficulty?: 'easy' | 'medium' | 'hard';
 }
 
+export interface FFFQuestionSet {
+  main: Question;
+  alternate: Question;
+}
+
 export interface TimerState {
   duration: number;
   startTime: number | null;

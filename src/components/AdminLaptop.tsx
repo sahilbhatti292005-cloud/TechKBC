@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { GameState } from '../types';
-import { FFF_QUESTIONS, HOT_SEAT_QUESTIONS } from '../constants';
+import { FFF_QUESTION_SETS, HOT_SEAT_QUESTIONS } from '../constants';
 import { Play, Eye, Lock, Trophy, UserCheck, RefreshCw, CheckCircle, XCircle, Zap, Pause, Square, Users, AlertTriangle } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { ref, update, set, remove } from 'firebase/database';
@@ -37,6 +37,7 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
     switch (action) {
       case 'START_FFF':
         if (!gameState) return;
+        const fffInitDuration = 15000;
         await update(gameRef, {
           phase: 'FFF_QUESTION',
           currentQuestion: payload.question,
@@ -44,13 +45,47 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
           fffSubmissions: null,
           lockedOption: null,
           revealCorrect: false,
-          showBottomLeaderboard: true
+          showBottomLeaderboard: true,
+          'timer/isRunning': false,
+          'timer/isPaused': false,
+          'timer/startTime': null,
+          'timer/endTime': null,
+          'timer/remainingTime': fffInitDuration,
+          'timer/duration': fffInitDuration,
+          'timer/type': 'FFF'
         });
         // Reset team FFF stats
         (gameState.teams || []).forEach(async (t) => {
           await update(ref(db, `gameState/teams/${t.id}`), { isCorrect: 0, fffTime: null });
         });
         break;
+      case 'REFRESH_FFF': {
+        if (!gameState) return;
+        const currentCycle = gameState.cycle || 1;
+        const questionSet = FFF_QUESTION_SETS[(currentCycle - 1) % FFF_QUESTION_SETS.length];
+        const fffRefreshDuration = 15000;
+        
+        await update(gameRef, {
+          phase: 'FFF_QUESTION',
+          currentQuestion: questionSet.alternate,
+          currentQuestionId: questionSet.alternate.id,
+          fffSubmissions: null,
+          lockedOption: null,
+          revealCorrect: false,
+          'timer/isRunning': false,
+          'timer/isPaused': false,
+          'timer/startTime': null,
+          'timer/endTime': null,
+          'timer/remainingTime': fffRefreshDuration,
+          'timer/duration': fffRefreshDuration,
+          'timer/type': 'FFF'
+        });
+        // Reset team FFF stats
+        (gameState.teams || []).forEach(async (t) => {
+          await update(ref(db, `gameState/teams/${t.id}`), { isCorrect: 0, fffTime: null });
+        });
+        break;
+      }
       case 'SHOW_FFF_OPTIONS':
         const fffDuration = 15000;
         await update(gameRef, {
@@ -97,7 +132,9 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
           'timer/type': null
         });
         break;
-      case 'START_HOT_SEAT_QUESTION':
+      case 'START_HOT_SEAT_QUESTION': {
+        const diff = payload.question.difficulty as 'easy' | 'medium' | 'hard';
+        const duration = diff === 'easy' ? 30000 : diff === 'medium' ? 45000 : 60000;
         await update(gameRef, {
           phase: 'HOT_SEAT_QUESTION',
           currentQuestion: payload.question,
@@ -110,10 +147,12 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
           'timer/isPaused': false,
           'timer/startTime': null,
           'timer/endTime': null,
-          'timer/remainingTime': 0,
-          'timer/type': null
+          'timer/remainingTime': duration,
+          'timer/duration': duration,
+          'timer/type': 'HOT_SEAT'
         });
         break;
+      }
       case 'RESET_HOT_SEAT_UI':
         await update(gameRef, {
           phase: 'HOT_SEAT',
@@ -309,11 +348,12 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
       case 'REFRESH_QUESTION': {
         if (!gameState) return;
         const diff = payload.difficulty as 'easy' | 'medium' | 'hard';
-        const newIndex = (questionIndices[diff] + 1) % HOT_SEAT_QUESTIONS[diff].length;
-        setQuestionIndices(prev => ({ ...prev, [diff]: newIndex }));
+        const newAltIndex = (questionIndices[diff] + 1) % 3;
+        setQuestionIndices(prev => ({ ...prev, [diff]: newAltIndex }));
         setSelectedDifficulty(diff);
         
-        const newQuestion = HOT_SEAT_QUESTIONS[diff][newIndex];
+        const questionIndex = ((gameState.cycle - 1) * 3 + newAltIndex) % HOT_SEAT_QUESTIONS[diff].length;
+        const newQuestion = HOT_SEAT_QUESTIONS[diff][questionIndex];
         const duration = diff === 'easy' ? 30000 : diff === 'medium' ? 45000 : 60000;
         
         await update(gameRef, {
@@ -388,6 +428,7 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
         });
         break;
       case 'NEXT_CYCLE':
+        setQuestionIndices({ easy: 0, medium: 0, hard: 0 });
         await update(gameRef, {
           cycle: (gameState.cycle || 1) + 1,
           phase: 'LOBBY',
@@ -395,6 +436,7 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
         });
         break;
       case 'PREVIOUS_CYCLE':
+        setQuestionIndices({ easy: 0, medium: 0, hard: 0 });
         await update(gameRef, {
           cycle: Math.max(1, (gameState.cycle || 1) - 1),
           phase: 'LOBBY',
@@ -426,9 +468,6 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
     });
   };
 
-  const currentHotSeatQuestion = HOT_SEAT_QUESTIONS[selectedDifficulty][questionIndices[selectedDifficulty]];
-  const currentFFFQuestion = FFF_QUESTIONS[0]; // FFF usually only has one or we can use a separate index if needed
-
   if (!gameState) {
     return (
       <div className="min-h-screen bg-[#0a0a2a] text-white flex flex-col items-center justify-center p-8 space-y-6">
@@ -445,6 +484,10 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
       </div>
     );
   }
+
+  const currentHotSeatQuestion = HOT_SEAT_QUESTIONS[selectedDifficulty][((gameState.cycle - 1) * 3 + questionIndices[selectedDifficulty]) % HOT_SEAT_QUESTIONS[selectedDifficulty].length];
+  const currentFFFQuestionSet = FFF_QUESTION_SETS[(gameState.cycle - 1) % FFF_QUESTION_SETS.length];
+  const currentFFFQuestion = currentFFFQuestionSet.main;
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8">
@@ -505,6 +548,12 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
               icon={<Trophy />} label="Show Leaderboard" 
               onClick={() => sendAction('SHOW_LEADERBOARD')} 
               active={gameState.phase === 'FFF_RESULT'}
+            />
+            <AdminButton 
+              icon={<RefreshCw />} label="Refresh FFF" 
+              onClick={() => sendAction('REFRESH_FFF')} 
+              active={['FFF_QUESTION', 'FFF_OPTIONS', 'FFF_RESULT', 'LOBBY'].includes(gameState.phase)}
+              variant="danger"
             />
           </div>
           
@@ -595,6 +644,7 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
                     setPendingDifficulty(d);
                   } else {
                     setSelectedDifficulty(d);
+                    setQuestionIndices(prev => ({ ...prev, [d]: 0 }));
                     sendAction('RESET_HOT_SEAT_UI');
                   }
                 }}
