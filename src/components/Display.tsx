@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { GameState, Team } from '../types';
 import { BarChart, Bar, XAxis, YAxis, Cell, ResponsiveContainer, Text } from 'recharts';
@@ -10,6 +10,82 @@ interface DisplayProps {
 
 const Display: React.FC<DisplayProps> = ({ gameState }) => {
   const [timeLeft, setTimeLeft] = useState(0);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const lastTimerStartRef = useRef<number | null>(null);
+
+  // Initialize audio once and handle cleanup
+  useEffect(() => {
+    const audio = new Audio('/soundeffect/KBCTimer.mp3');
+    audioRef.current = audio;
+    
+    return () => {
+      audio.pause();
+      audio.src = "";
+      audioRef.current = null;
+    };
+  }, []);
+
+  // Handle audio playback logic
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio || !gameState) return;
+
+    const isHotSeatPhase = ['HOT_SEAT_QUESTION', 'HOT_SEAT_OPTIONS'].includes(gameState.phase);
+    const isCallDevPhase = gameState.phase === 'CALL_DEV';
+    const isTimerRunning = gameState.timer.isRunning;
+    const isTimerPaused = gameState.timer.isPaused;
+    const timerType = gameState.timer.type;
+    const difficulty = gameState.currentQuestion?.difficulty;
+
+    // Determine if audio should be active for current state
+    const shouldBeActive = (isHotSeatPhase && timerType === 'HOT_SEAT') || isCallDevPhase;
+
+    if (shouldBeActive && isTimerRunning) {
+      // Check if this is a new timer session
+      if (gameState.timer.startTime !== lastTimerStartRef.current) {
+        audio.currentTime = 0;
+        lastTimerStartRef.current = gameState.timer.startTime;
+      }
+      
+      // Set looping behavior
+      // Call Dev: loop full 60s. Hot Seat: no loop.
+      audio.loop = isCallDevPhase;
+      
+      // Play audio
+      audio.play().catch(err => console.warn("Audio play failed:", err));
+
+      // Enforce duration limits for Hot Seat
+      if (isHotSeatPhase) {
+        let maxDuration = 60;
+        if (difficulty === 'easy') maxDuration = 30;
+        if (difficulty === 'medium') maxDuration = 45;
+        
+        const checkTime = () => {
+          if (audio.currentTime >= maxDuration) {
+            audio.pause();
+            audio.currentTime = maxDuration;
+            audio.removeEventListener('timeupdate', checkTime);
+          }
+        };
+        audio.addEventListener('timeupdate', checkTime);
+        return () => audio.removeEventListener('timeupdate', checkTime);
+      }
+    } else if (shouldBeActive && isTimerPaused) {
+      audio.pause();
+    } else {
+      // Stop and Reset
+      audio.pause();
+      audio.currentTime = 0;
+      lastTimerStartRef.current = null;
+    }
+  }, [
+    gameState?.timer.isRunning, 
+    gameState?.timer.isPaused, 
+    gameState?.timer.startTime,
+    gameState?.timer.type, 
+    gameState?.phase, 
+    gameState?.currentQuestion?.difficulty
+  ]);
 
   useEffect(() => {
     if (gameState?.timer.isRunning) {
