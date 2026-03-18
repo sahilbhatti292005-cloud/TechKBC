@@ -69,6 +69,7 @@ export interface GameState {
   showBottomLeaderboard: boolean;
   fffSubmissions?: Record<string, any>;
   isTimeOut: boolean;
+  questionTrigger?: number | null;
 }
 
 export type Role = 'admin_laptop' | 'admin_mobile' | 'volunteer' | 'display';

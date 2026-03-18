@@ -200,7 +200,7 @@ const GameContainer: React.FC = () => {
         <Route path="/admin-laptop" element={role === 'admin_laptop' ? <AdminLaptop gameState={gameState} /> : <Navigate to="/" />} />
         <Route path="/admin-mobile" element={role === 'admin_mobile' ? <AdminMobile gameState={gameState} /> : <Navigate to="/" />} />
         <Route path="/volunteer" element={role === 'volunteer' ? <Volunteer gameState={gameState} teamId={teamId!} /> : <Navigate to="/" />} />
-        <Route path="/display" element={<Display gameState={gameState} />} />
+        <Route path="/display" element={<Display gameState={gameState} role={role} />} />
         <Route path="*" element={<Navigate to={`/${role.replace('_', '-')}`} />} />
       </Routes>
     </div>

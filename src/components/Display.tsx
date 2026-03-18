@@ -1,32 +1,59 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { GameState, Team } from '../types';
+import { GameState, Team, Role } from '../types';
 import { BarChart, Bar, XAxis, YAxis, Cell, ResponsiveContainer, Text } from 'recharts';
 import { Timer, Trophy, Users, Split, Phone } from 'lucide-react';
 
 interface DisplayProps {
   gameState: GameState | null;
+  role: Role | null;
 }
 
-const Display: React.FC<DisplayProps> = ({ gameState }) => {
+const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
   const [timeLeft, setTimeLeft] = useState(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const questionAudioRef = useRef<HTMLAudioElement | null>(null);
   const lastTimerStartRef = useRef<number | null>(null);
+  const lastQuestionTriggerRef = useRef<number | null>(null);
 
   // Initialize audio once and handle cleanup
   useEffect(() => {
+    if (role !== 'display') return;
+
     const audio = new Audio('/soundeffect/KBCTimer.mp3');
+    const qAudio = new Audio('/soundeffect/kbc-question.mp3');
     audioRef.current = audio;
+    questionAudioRef.current = qAudio;
     
     return () => {
       audio.pause();
       audio.src = "";
       audioRef.current = null;
+      qAudio.pause();
+      qAudio.src = "";
+      questionAudioRef.current = null;
     };
-  }, []);
+  }, [role]);
+
+  // Handle question start sound
+  useEffect(() => {
+    if (role !== 'display') return;
+
+    const audio = questionAudioRef.current;
+    if (!audio || !gameState?.questionTrigger) return;
+
+    if (gameState.questionTrigger !== lastQuestionTriggerRef.current) {
+      audio.pause();
+      audio.currentTime = 0;
+      audio.play().catch(err => console.warn("Question audio play failed:", err));
+      lastQuestionTriggerRef.current = gameState.questionTrigger;
+    }
+  }, [gameState?.questionTrigger, role]);
 
   // Handle audio playback logic
   useEffect(() => {
+    if (role !== 'display') return;
+
     const audio = audioRef.current;
     if (!audio || !gameState) return;
 
@@ -39,8 +66,9 @@ const Display: React.FC<DisplayProps> = ({ gameState }) => {
 
     // Determine if audio should be active for current state
     const shouldBeActive = (isHotSeatPhase && timerType === 'HOT_SEAT') || isCallDevPhase;
+    const isTimerFinished = timeLeft === 0 && !isTimerPaused;
 
-    if (shouldBeActive && isTimerRunning) {
+    if (shouldBeActive && isTimerRunning && timeLeft > 0) {
       // Check if this is a new timer session
       if (gameState.timer.startTime !== lastTimerStartRef.current) {
         audio.currentTime = 0;
@@ -70,13 +98,15 @@ const Display: React.FC<DisplayProps> = ({ gameState }) => {
         audio.addEventListener('timeupdate', checkTime);
         return () => audio.removeEventListener('timeupdate', checkTime);
       }
-    } else if (shouldBeActive && isTimerPaused) {
+    } else if (shouldBeActive && isTimerPaused && timeLeft > 0) {
       audio.pause();
     } else {
       // Stop and Reset
       audio.pause();
       audio.currentTime = 0;
-      lastTimerStartRef.current = null;
+      if (!isTimerPaused) {
+        lastTimerStartRef.current = null;
+      }
     }
   }, [
     gameState?.timer.isRunning, 
@@ -84,7 +114,8 @@ const Display: React.FC<DisplayProps> = ({ gameState }) => {
     gameState?.timer.startTime,
     gameState?.timer.type, 
     gameState?.phase, 
-    gameState?.currentQuestion?.difficulty
+    gameState?.currentQuestion?.difficulty,
+    timeLeft
   ]);
 
   useEffect(() => {
