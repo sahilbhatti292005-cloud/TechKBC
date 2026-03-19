@@ -13,8 +13,11 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
   const [timeLeft, setTimeLeft] = useState(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const questionAudioRef = useRef<HTMLAudioElement | null>(null);
+  const correctAudioRef = useRef<HTMLAudioElement | null>(null);
+  const wrongAudioRef = useRef<HTMLAudioElement | null>(null);
   const lastTimerStartRef = useRef<number | null>(null);
   const lastQuestionTriggerRef = useRef<number | null>(null);
+  const lastAnswerTriggerRef = useRef<number | null>(null);
 
   // Initialize audio once and handle cleanup
   useEffect(() => {
@@ -22,8 +25,12 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
 
     const audio = new Audio('/soundeffect/KBCTimer.mp3');
     const qAudio = new Audio('/soundeffect/kbc-question.mp3');
+    const cAudio = new Audio('/soundeffect/corectanswer.mp3');
+    const wAudio = new Audio('/soundeffect/wronganswer.mp3');
     audioRef.current = audio;
     questionAudioRef.current = qAudio;
+    correctAudioRef.current = cAudio;
+    wrongAudioRef.current = wAudio;
     
     return () => {
       audio.pause();
@@ -32,6 +39,12 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
       qAudio.pause();
       qAudio.src = "";
       questionAudioRef.current = null;
+      cAudio.pause();
+      cAudio.src = "";
+      correctAudioRef.current = null;
+      wAudio.pause();
+      wAudio.src = "";
+      wrongAudioRef.current = null;
     };
   }, [role]);
 
@@ -49,6 +62,29 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
       lastQuestionTriggerRef.current = gameState.questionTrigger;
     }
   }, [gameState?.questionTrigger, role]);
+
+  // Handle answer result sound
+  useEffect(() => {
+    if (role !== 'display') return;
+
+    const correctAudio = correctAudioRef.current;
+    const wrongAudio = wrongAudioRef.current;
+    if (!correctAudio || !wrongAudio || !gameState?.answerTrigger || !gameState.currentQuestion) return;
+
+    if (gameState.answerTrigger !== lastAnswerTriggerRef.current) {
+      // Stop both before playing
+      correctAudio.pause();
+      correctAudio.currentTime = 0;
+      wrongAudio.pause();
+      wrongAudio.currentTime = 0;
+
+      const isCorrect = gameState.lockedOption === gameState.currentQuestion.correctIndex;
+      const targetAudio = isCorrect ? correctAudio : wrongAudio;
+
+      targetAudio.play().catch(err => console.warn("Answer audio play failed:", err));
+      lastAnswerTriggerRef.current = gameState.answerTrigger;
+    }
+  }, [gameState?.answerTrigger, gameState?.lockedOption, gameState?.currentQuestion, role]);
 
   // Handle audio playback logic
   useEffect(() => {

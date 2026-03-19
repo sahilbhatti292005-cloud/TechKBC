@@ -269,6 +269,7 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
       case 'REVEAL_CORRECT':
         await update(gameRef, {
           revealCorrect: true,
+          answerTrigger: Date.now(),
           'timer/isRunning': false,
           'timer/isPaused': false,
           'timer/startTime': null,

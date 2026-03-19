@@ -70,6 +70,7 @@ export interface GameState {
   fffSubmissions?: Record<string, any>;
   isTimeOut: boolean;
   questionTrigger?: number | null;
+  answerTrigger?: number | null;
 }
 
 export type Role = 'admin_laptop' | 'admin_mobile' | 'volunteer' | 'display';
