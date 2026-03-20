@@ -19,6 +19,8 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
   const fffTimerAudioRef = useRef<HTMLAudioElement | null>(null);
   const crowdSourceAudioRef = useRef<HTMLAudioElement | null>(null);
   const fffWinnerAudioRef = useRef<HTMLAudioElement | null>(null);
+  const bellSmallAudioRef = useRef<HTMLAudioElement | null>(null);
+  const bellLargeAudioRef = useRef<HTMLAudioElement | null>(null);
   const lastTimerStartRef = useRef<number | null>(null);
   const lastQuestionTriggerRef = useRef<number | null>(null);
   const lastAnswerTriggerRef = useRef<number | null>(null);
@@ -26,6 +28,8 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
   const lastFffTimerTriggerRef = useRef<number | null>(null);
   const lastCrowdSourceTriggerRef = useRef<number | null>(null);
   const lastFffWinnerTriggerRef = useRef<number | null>(null);
+  const lastBellSmallTriggerRef = useRef<number | null>(null);
+  const lastBellLargeTriggerRef = useRef<number | null>(null);
   const isFirstRender = useRef(true);
 
   // Initialize audio once and handle cleanup
@@ -40,6 +44,8 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
     const fffAudio = new Audio('/soundeffect/ffftimer.mp3');
     const csAudio = new Audio('/soundeffect/crowdsource.mp3');
     const fffWAudio = new Audio('/soundeffect/fffwinner.mp3');
+    const bsAudio = new Audio('/soundeffect/fffwinner.mp3');
+    const blAudio = new Audio('/soundeffect/kbclarge.mp3');
     audioRef.current = audio;
     questionAudioRef.current = qAudio;
     correctAudioRef.current = cAudio;
@@ -48,6 +54,8 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
     fffTimerAudioRef.current = fffAudio;
     crowdSourceAudioRef.current = csAudio;
     fffWinnerAudioRef.current = fffWAudio;
+    bellSmallAudioRef.current = bsAudio;
+    bellLargeAudioRef.current = blAudio;
     
     return () => {
       audio.pause();
@@ -74,6 +82,12 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
       fffWAudio.pause();
       fffWAudio.src = "";
       fffWinnerAudioRef.current = null;
+      bsAudio.pause();
+      bsAudio.src = "";
+      bellSmallAudioRef.current = null;
+      blAudio.pause();
+      blAudio.src = "";
+      bellLargeAudioRef.current = null;
     };
   }, [role]);
 
@@ -86,6 +100,8 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
       lastFffTimerTriggerRef.current = gameState.fffTimerTrigger || null;
       lastCrowdSourceTriggerRef.current = gameState.crowdSourceTrigger || null;
       lastFffWinnerTriggerRef.current = gameState.fffWinnerTrigger || null;
+      lastBellSmallTriggerRef.current = gameState.bellSmallTrigger || null;
+      lastBellLargeTriggerRef.current = gameState.bellLargeTrigger || null;
       isFirstRender.current = false;
     }
   }, [gameState]);
@@ -197,6 +213,36 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
       lastFffWinnerTriggerRef.current = gameState.fffWinnerTrigger;
     }
   }, [gameState?.fffWinnerTrigger, role]);
+
+  // Handle Bell Small sound
+  useEffect(() => {
+    if (role !== 'display') return;
+
+    const audio = bellSmallAudioRef.current;
+    if (!audio || !gameState?.bellSmallTrigger) return;
+
+    if (gameState.bellSmallTrigger !== lastBellSmallTriggerRef.current) {
+      audio.pause();
+      audio.currentTime = 0;
+      audio.play().catch(err => console.warn("Bell Small audio play failed:", err));
+      lastBellSmallTriggerRef.current = gameState.bellSmallTrigger;
+    }
+  }, [gameState?.bellSmallTrigger, role]);
+
+  // Handle Bell Large sound
+  useEffect(() => {
+    if (role !== 'display') return;
+
+    const audio = bellLargeAudioRef.current;
+    if (!audio || !gameState?.bellLargeTrigger) return;
+
+    if (gameState.bellLargeTrigger !== lastBellLargeTriggerRef.current) {
+      audio.pause();
+      audio.currentTime = 0;
+      audio.play().catch(err => console.warn("Bell Large audio play failed:", err));
+      lastBellLargeTriggerRef.current = gameState.bellLargeTrigger;
+    }
+  }, [gameState?.bellLargeTrigger, role]);
 
   // Handle lock audio interruption for other actions (Lifelines, Phase changes)
   useEffect(() => {

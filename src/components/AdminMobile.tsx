@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { GameState } from '../types';
-import { UserCheck, Trash2, AlertTriangle } from 'lucide-react';
+import { UserCheck, Trash2, AlertTriangle, Bell } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { ref, update, remove } from 'firebase/database';
 
@@ -81,6 +81,12 @@ const AdminMobile: React.FC<AdminMobileProps> = ({ gameState }) => {
         }
         break;
       }
+      case 'BELL_SMALL':
+        await update(gameRef, { bellSmallTrigger: Date.now() });
+        break;
+      case 'BELL_LARGE':
+        await update(gameRef, { bellLargeTrigger: Date.now() });
+        break;
       case 'UPDATE_SCORE':
         const team = gameState.teams.find(t => t.id === payload.teamId);
         if (team) {
@@ -125,7 +131,23 @@ const AdminMobile: React.FC<AdminMobileProps> = ({ gameState }) => {
     <div className="p-4 bg-[#0a0a2a] min-h-screen text-white space-y-6">
       <header className="flex justify-between items-center">
         <h1 className="text-xl font-bold">Score Control</h1>
-        <div className="text-xs font-mono text-blue-400 uppercase tracking-widest">Cycle {gameState.cycle}</div>
+        <div className="flex items-center space-x-3">
+          <div className="flex bg-[#1a1a4a] rounded-lg p-1 border border-white/10">
+            <button 
+              onClick={() => sendAction('BELL_SMALL')}
+              className="p-2 text-red-500 active:bg-red-500/20 rounded-md transition-all"
+            >
+              <Bell className="w-5 h-5" />
+            </button>
+            <button 
+              onClick={() => sendAction('BELL_LARGE')}
+              className="p-2 text-green-500 active:bg-green-500/20 rounded-md transition-all"
+            >
+              <Bell className="w-6 h-6" />
+            </button>
+          </div>
+          <div className="text-xs font-mono text-blue-400 uppercase tracking-widest">Cycle {gameState.cycle}</div>
+        </div>
       </header>
 
       {/* Team Selection */}

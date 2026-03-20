@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { GameState } from '../types';
 import { FFF_QUESTION_SETS, HOT_SEAT_QUESTIONS } from '../constants';
-import { Play, Eye, Lock, Trophy, UserCheck, RefreshCw, CheckCircle, XCircle, Zap, Pause, Square, Users, AlertTriangle, Split, Phone } from 'lucide-react';
+import { Play, Eye, Lock, Trophy, UserCheck, RefreshCw, CheckCircle, XCircle, Zap, Pause, Square, Users, AlertTriangle, Split, Phone, Bell } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { ref, update, set, remove } from 'firebase/database';
 
@@ -125,6 +125,12 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
     }
 
     switch (action) {
+      case 'BELL_SMALL':
+        await update(gameRef, { bellSmallTrigger: Date.now() });
+        break;
+      case 'BELL_LARGE':
+        await update(gameRef, { bellLargeTrigger: Date.now() });
+        break;
       case 'START_FFF':
         if (!gameState) return;
         const fffInitDuration = 15000;
@@ -592,6 +598,8 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
           fffTimerTrigger: null,
           crowdSourceTrigger: null,
           fffWinnerTrigger: null,
+          bellSmallTrigger: null,
+          bellLargeTrigger: null,
           timer: {
             duration: 0,
             startTime: null,
@@ -673,6 +681,22 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
           <p className="text-gray-400 text-sm">Cycle {gameState.cycle} / 10 • Status: <span className="text-blue-400 font-mono">{gameState.phase}</span></p>
         </div>
         <div className="flex space-x-4">
+          <div className="flex bg-[#0a0a2a] rounded-lg p-1 border border-white/5 mr-2">
+            <button 
+              onClick={() => sendAction('BELL_SMALL')}
+              className="p-2 hover:bg-red-500/20 text-red-500 rounded-md transition-all"
+              title="Small Bell (fffwinner)"
+            >
+              <Bell className="w-5 h-5" />
+            </button>
+            <button 
+              onClick={() => sendAction('BELL_LARGE')}
+              className="p-2 hover:bg-green-500/20 text-green-500 rounded-md transition-all"
+              title="Large Bell (kbclarge)"
+            >
+              <Bell className="w-6 h-6" />
+            </button>
+          </div>
           <button onClick={() => sendAction('REFRESH_TEAMS')} className="bg-gray-600 hover:bg-gray-700 px-4 py-2 rounded-lg text-sm font-bold flex items-center">
             <RefreshCw className="w-4 h-4 mr-2" /> Refresh Teams
           </button>
