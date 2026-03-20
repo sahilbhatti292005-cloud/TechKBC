@@ -23,9 +23,9 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
   const isFirstRender = React.useRef(true);
 
   React.useEffect(() => {
-    const lockAudio = new Audio('/soundeffect/lockoption.mp3');
-    const fffAudio = new Audio('/soundeffect/ffftimer.mp3');
-    const csAudio = new Audio('/soundeffect/crowdsource.mp3');
+    const lockAudio = new Audio('/public/soundeffect/lockoption.mp3');
+    const fffAudio = new Audio('/public/soundeffect/ffftimer.mp3');
+    const csAudio = new Audio('/public/soundeffect/crowdsource.mp3');
     lockAudioRef.current = lockAudio;
     fffTimerAudioRef.current = fffAudio;
     crowdSourceAudioRef.current = csAudio;

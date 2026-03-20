@@ -37,16 +37,16 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
   useEffect(() => {
     if (role !== 'display') return;
 
-    const audio = new Audio('/soundeffect/KBCTimer.mp3');
-    const qAudio = new Audio('/soundeffect/kbc-question.mp3');
-    const cAudio = new Audio('/soundeffect/corectanswer.mp3');
-    const wAudio = new Audio('/soundeffect/wronganswer.mp3');
-    const lAudio = new Audio('/soundeffect/lockoption.mp3');
-    const fffAudio = new Audio('/soundeffect/ffftimer.mp3');
-    const csAudio = new Audio('/soundeffect/crowdsource.mp3');
-    const fffWAudio = new Audio('/soundeffect/fffwinner.mp3');
-    const bsAudio = new Audio('/soundeffect/fffwinner.mp3');
-    const blAudio = new Audio('/soundeffect/kbclarge.mp3');
+    const audio = new Audio('/public/soundeffect/KBCTimer.mp3');
+    const qAudio = new Audio('/public/soundeffect/kbc-question.mp3');
+    const cAudio = new Audio('/public/soundeffect/corectanswer.mp3');
+    const wAudio = new Audio('/public/soundeffect/wronganswer.mp3');
+    const lAudio = new Audio('/public/soundeffect/lockoption.mp3');
+    const fffAudio = new Audio('/public/soundeffect/ffftimer.mp3');
+    const csAudio = new Audio('/public/soundeffect/crowdsource.mp3');
+    const fffWAudio = new Audio('/public/soundeffect/fffwinner.mp3');
+    const bsAudio = new Audio('/public/soundeffect/fffwinner.mp3');
+    const blAudio = new Audio('/public/soundeffect/kbclarge.mp3');
     audioRef.current = audio;
     questionAudioRef.current = qAudio;
     correctAudioRef.current = cAudio;

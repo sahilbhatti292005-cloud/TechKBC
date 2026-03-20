@@ -14,7 +14,7 @@ const AdminMobile: React.FC<AdminMobileProps> = ({ gameState }) => {
   const lockAudioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
-    const audio = new Audio('/soundeffect/lockoption.mp3');
+    const audio = new Audio('/public/soundeffect/lockoption.mp3');
     lockAudioRef.current = audio;
     return () => {
       audio.pause();
