@@ -71,6 +71,10 @@ export interface GameState {
   isTimeOut: boolean;
   questionTrigger?: number | null;
   answerTrigger?: number | null;
+  lockTrigger?: number | null;
+  fffTimerTrigger?: number | null;
+  crowdSourceTrigger?: number | null;
+  fffWinnerTrigger?: number | null;
 }
 
 export type Role = 'admin_laptop' | 'admin_mobile' | 'volunteer' | 'display';

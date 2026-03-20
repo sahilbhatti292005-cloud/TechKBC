@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { GameState } from '../types';
 import { UserCheck, Trash2, AlertTriangle } from 'lucide-react';
 import { db } from '../lib/firebase';
@@ -11,20 +11,55 @@ interface AdminMobileProps {
 const AdminMobile: React.FC<AdminMobileProps> = ({ gameState }) => {
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const lockAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    const audio = new Audio('/soundeffect/lockoption.mp3');
+    lockAudioRef.current = audio;
+    return () => {
+      audio.pause();
+      audio.src = "";
+    };
+  }, []);
+
+  const playLockSound = () => {
+    const audio = lockAudioRef.current;
+    if (audio) {
+      audio.pause();
+      audio.currentTime = 0;
+      audio.play().catch(err => console.warn("Lock audio play failed:", err));
+    }
+  };
+
+  const stopLockSound = () => {
+    const audio = lockAudioRef.current;
+    if (audio) {
+      audio.pause();
+      audio.currentTime = 0;
+    }
+  };
 
   const sendAction = async (action: string, payload: any = {}) => {
     if (!gameState) return;
     const gameRef = ref(db, 'gameState');
+
+    // Interrupt lock sound for any action other than LOCK_OPTION
+    if (action !== 'LOCK_OPTION') {
+      stopLockSound();
+    }
 
     switch (action) {
       case 'LOCK_OPTION': {
         if (!gameState) return;
         const isCurrentlyLocked = gameState.lockedOption === payload.optionIndex;
         
+        playLockSound();
+        
         if (isCurrentlyLocked) {
           // Unlock and resume timer
           await update(gameRef, { 
             lockedOption: null,
+            lockTrigger: Date.now(),
             'timer/isRunning': true,
             'timer/isPaused': false,
             'timer/startTime': Date.now(),
@@ -38,6 +73,7 @@ const AdminMobile: React.FC<AdminMobileProps> = ({ gameState }) => {
             
           await update(gameRef, { 
             lockedOption: payload.optionIndex,
+            lockTrigger: Date.now(),
             'timer/isRunning': false,
             'timer/isPaused': true,
             'timer/remainingTime': remaining

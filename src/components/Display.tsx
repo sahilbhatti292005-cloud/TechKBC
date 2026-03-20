@@ -15,9 +15,18 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
   const questionAudioRef = useRef<HTMLAudioElement | null>(null);
   const correctAudioRef = useRef<HTMLAudioElement | null>(null);
   const wrongAudioRef = useRef<HTMLAudioElement | null>(null);
+  const lockAudioRef = useRef<HTMLAudioElement | null>(null);
+  const fffTimerAudioRef = useRef<HTMLAudioElement | null>(null);
+  const crowdSourceAudioRef = useRef<HTMLAudioElement | null>(null);
+  const fffWinnerAudioRef = useRef<HTMLAudioElement | null>(null);
   const lastTimerStartRef = useRef<number | null>(null);
   const lastQuestionTriggerRef = useRef<number | null>(null);
   const lastAnswerTriggerRef = useRef<number | null>(null);
+  const lastLockTriggerRef = useRef<number | null>(null);
+  const lastFffTimerTriggerRef = useRef<number | null>(null);
+  const lastCrowdSourceTriggerRef = useRef<number | null>(null);
+  const lastFffWinnerTriggerRef = useRef<number | null>(null);
+  const isFirstRender = useRef(true);
 
   // Initialize audio once and handle cleanup
   useEffect(() => {
@@ -27,10 +36,18 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
     const qAudio = new Audio('/soundeffect/kbc-question.mp3');
     const cAudio = new Audio('/soundeffect/corectanswer.mp3');
     const wAudio = new Audio('/soundeffect/wronganswer.mp3');
+    const lAudio = new Audio('/soundeffect/lockoption.mp3');
+    const fffAudio = new Audio('/soundeffect/ffftimer.mp3');
+    const csAudio = new Audio('/soundeffect/crowdsource.mp3');
+    const fffWAudio = new Audio('/soundeffect/fffwinner.mp3');
     audioRef.current = audio;
     questionAudioRef.current = qAudio;
     correctAudioRef.current = cAudio;
     wrongAudioRef.current = wAudio;
+    lockAudioRef.current = lAudio;
+    fffTimerAudioRef.current = fffAudio;
+    crowdSourceAudioRef.current = csAudio;
+    fffWinnerAudioRef.current = fffWAudio;
     
     return () => {
       audio.pause();
@@ -45,8 +62,33 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
       wAudio.pause();
       wAudio.src = "";
       wrongAudioRef.current = null;
+      lAudio.pause();
+      lAudio.src = "";
+      lockAudioRef.current = null;
+      fffAudio.pause();
+      fffAudio.src = "";
+      fffTimerAudioRef.current = null;
+      csAudio.pause();
+      csAudio.src = "";
+      crowdSourceAudioRef.current = null;
+      fffWAudio.pause();
+      fffWAudio.src = "";
+      fffWinnerAudioRef.current = null;
     };
   }, [role]);
+
+  // Sync triggers on mount to prevent play-on-mount
+  useEffect(() => {
+    if (gameState && isFirstRender.current) {
+      lastQuestionTriggerRef.current = gameState.questionTrigger || null;
+      lastAnswerTriggerRef.current = gameState.answerTrigger || null;
+      lastLockTriggerRef.current = gameState.lockTrigger || null;
+      lastFffTimerTriggerRef.current = gameState.fffTimerTrigger || null;
+      lastCrowdSourceTriggerRef.current = gameState.crowdSourceTrigger || null;
+      lastFffWinnerTriggerRef.current = gameState.fffWinnerTrigger || null;
+      isFirstRender.current = false;
+    }
+  }, [gameState]);
 
   // Handle question start sound
   useEffect(() => {
@@ -56,6 +98,11 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
     if (!audio || !gameState?.questionTrigger) return;
 
     if (gameState.questionTrigger !== lastQuestionTriggerRef.current) {
+      // Interrupt lock audio
+      if (lockAudioRef.current) {
+        lockAudioRef.current.pause();
+        lockAudioRef.current.currentTime = 0;
+      }
       audio.pause();
       audio.currentTime = 0;
       audio.play().catch(err => console.warn("Question audio play failed:", err));
@@ -72,6 +119,11 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
     if (!correctAudio || !wrongAudio || !gameState?.answerTrigger || !gameState.currentQuestion) return;
 
     if (gameState.answerTrigger !== lastAnswerTriggerRef.current) {
+      // Interrupt lock audio
+      if (lockAudioRef.current) {
+        lockAudioRef.current.pause();
+        lockAudioRef.current.currentTime = 0;
+      }
       // Stop both before playing
       correctAudio.pause();
       correctAudio.currentTime = 0;
@@ -85,6 +137,79 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
       lastAnswerTriggerRef.current = gameState.answerTrigger;
     }
   }, [gameState?.answerTrigger, gameState?.lockedOption, gameState?.currentQuestion, role]);
+
+  // Handle lock option sound
+  useEffect(() => {
+    if (role !== 'display') return;
+
+    const audio = lockAudioRef.current;
+    if (!audio || !gameState?.lockTrigger) return;
+
+    if (gameState.lockTrigger !== lastLockTriggerRef.current) {
+      audio.pause();
+      audio.currentTime = 0;
+      audio.play().catch(err => console.warn("Lock audio play failed:", err));
+      lastLockTriggerRef.current = gameState.lockTrigger;
+    }
+  }, [gameState?.lockTrigger, role]);
+
+  // Handle FFF Timer sound
+  useEffect(() => {
+    if (role !== 'display') return;
+
+    const audio = fffTimerAudioRef.current;
+    if (!audio || !gameState?.fffTimerTrigger) return;
+
+    if (gameState.fffTimerTrigger !== lastFffTimerTriggerRef.current) {
+      audio.pause();
+      audio.currentTime = 0;
+      audio.play().catch(err => console.warn("FFF Timer audio play failed:", err));
+      lastFffTimerTriggerRef.current = gameState.fffTimerTrigger;
+    }
+  }, [gameState?.fffTimerTrigger, role]);
+
+  // Handle Crowd Source sound
+  useEffect(() => {
+    if (role !== 'display') return;
+
+    const audio = crowdSourceAudioRef.current;
+    if (!audio || !gameState?.crowdSourceTrigger) return;
+
+    if (gameState.crowdSourceTrigger !== lastCrowdSourceTriggerRef.current) {
+      audio.pause();
+      audio.currentTime = 0;
+      audio.play().catch(err => console.warn("Crowd Source audio play failed:", err));
+      lastCrowdSourceTriggerRef.current = gameState.crowdSourceTrigger;
+    }
+  }, [gameState?.crowdSourceTrigger, role]);
+
+  // Handle FFF Winner sound
+  useEffect(() => {
+    if (role !== 'display') return;
+
+    const audio = fffWinnerAudioRef.current;
+    if (!audio || !gameState?.fffWinnerTrigger) return;
+
+    if (gameState.fffWinnerTrigger !== lastFffWinnerTriggerRef.current) {
+      audio.pause();
+      audio.currentTime = 0;
+      audio.play().catch(err => console.warn("FFF Winner audio play failed:", err));
+      lastFffWinnerTriggerRef.current = gameState.fffWinnerTrigger;
+    }
+  }, [gameState?.fffWinnerTrigger, role]);
+
+  // Handle lock audio interruption for other actions (Lifelines, Phase changes)
+  useEffect(() => {
+    if (role !== 'display') return;
+    const audio = lockAudioRef.current;
+    if (!audio) return;
+
+    // If phase changes or lifeline is activated, stop lock audio
+    // We exclude the triggers handled in their own effects to avoid double logic, 
+    // but adding them here is safer for "any other control button".
+    audio.pause();
+    audio.currentTime = 0;
+  }, [gameState?.phase, gameState?.activeLifeline, gameState?.revealCorrect, role]);
 
   // Handle audio playback logic
   useEffect(() => {

@@ -15,6 +15,85 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
   const [questionIndices, setQuestionIndices] = useState({ easy: 0, medium: 0, hard: 0 });
   const [timeLeft, setTimeLeft] = useState(0);
   const [pendingDifficulty, setPendingDifficulty] = useState<'easy' | 'medium' | 'hard' | null>(null);
+  const lockAudioRef = React.useRef<HTMLAudioElement | null>(null);
+  const fffTimerAudioRef = React.useRef<HTMLAudioElement | null>(null);
+  const crowdSourceAudioRef = React.useRef<HTMLAudioElement | null>(null);
+  const lastFffTimerTriggerRef = React.useRef<number | null>(null);
+  const lastCrowdSourceTriggerRef = React.useRef<number | null>(null);
+  const isFirstRender = React.useRef(true);
+
+  React.useEffect(() => {
+    const lockAudio = new Audio('/soundeffect/lockoption.mp3');
+    const fffAudio = new Audio('/soundeffect/ffftimer.mp3');
+    const csAudio = new Audio('/soundeffect/crowdsource.mp3');
+    lockAudioRef.current = lockAudio;
+    fffTimerAudioRef.current = fffAudio;
+    crowdSourceAudioRef.current = csAudio;
+    return () => {
+      lockAudio.pause();
+      lockAudio.src = "";
+      fffAudio.pause();
+      fffAudio.src = "";
+      csAudio.pause();
+      csAudio.src = "";
+    };
+  }, []);
+
+  // Sync triggers on mount to prevent play-on-mount
+  React.useEffect(() => {
+    if (gameState && isFirstRender.current) {
+      lastFffTimerTriggerRef.current = gameState.fffTimerTrigger || null;
+      lastCrowdSourceTriggerRef.current = gameState.crowdSourceTrigger || null;
+      isFirstRender.current = false;
+    }
+  }, [gameState]);
+
+  // Handle FFF Timer sound from database trigger
+  React.useEffect(() => {
+    const audio = fffTimerAudioRef.current;
+    if (!audio || !gameState?.fffTimerTrigger) return;
+
+    if (gameState.fffTimerTrigger !== lastFffTimerTriggerRef.current) {
+      audio.pause();
+      audio.currentTime = 0;
+      audio.play().catch(err => console.warn("FFF Timer audio play failed:", err));
+      lastFffTimerTriggerRef.current = gameState.fffTimerTrigger;
+    }
+  }, [gameState?.fffTimerTrigger]);
+
+  // Handle Crowd Source sound from database trigger
+  React.useEffect(() => {
+    const audio = crowdSourceAudioRef.current;
+    if (!audio || !gameState?.crowdSourceTrigger) return;
+
+    if (gameState.crowdSourceTrigger !== lastCrowdSourceTriggerRef.current) {
+      audio.pause();
+      audio.currentTime = 0;
+      audio.play().catch(err => console.warn("Crowd Source audio play failed:", err));
+      lastCrowdSourceTriggerRef.current = gameState.crowdSourceTrigger;
+    }
+  }, [gameState?.crowdSourceTrigger]);
+
+  const playLockSound = () => {
+    const audio = lockAudioRef.current;
+    if (audio) {
+      audio.pause();
+      audio.currentTime = 0;
+      audio.play().catch(err => console.warn("Lock audio play failed:", err));
+    }
+  };
+
+  const playFffTimerSound = () => {
+    // Handled by useEffect now
+  };
+
+  const stopLockSound = () => {
+    const audio = lockAudioRef.current;
+    if (audio) {
+      audio.pause();
+      audio.currentTime = 0;
+    }
+  };
 
   React.useEffect(() => {
     if (gameState?.timer.isRunning) {
@@ -39,6 +118,11 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
 
   const sendAction = async (action: string, payload: any = {}) => {
     const gameRef = ref(db, 'gameState');
+
+    // Interrupt lock sound for any action other than LOCK_OPTION
+    if (action !== 'LOCK_OPTION') {
+      stopLockSound();
+    }
 
     switch (action) {
       case 'START_FFF':
@@ -99,6 +183,7 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
         const fffDuration = 15000;
         await update(gameRef, {
           phase: 'FFF_OPTIONS',
+          fffTimerTrigger: Date.now(),
           'timer/duration': fffDuration,
           'timer/startTime': Date.now(),
           'timer/endTime': Date.now() + fffDuration,
@@ -130,6 +215,7 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
         await update(gameRef, {
           phase: 'HOT_SEAT',
           hotSeatTeamId: payload.teamId,
+          fffWinnerTrigger: Date.now(),
           showBottomLeaderboard: false,
           lifelines: { debugHelp: false, callDev: false, crowdSource: false },
           lockedOption: null,
@@ -242,10 +328,13 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
         if (!gameState) return;
         const isCurrentlyLocked = gameState.lockedOption === payload.optionIndex;
         
+        playLockSound();
+        
         if (isCurrentlyLocked) {
           // Unlock and resume timer
           await update(gameRef, { 
             lockedOption: null,
+            lockTrigger: Date.now(),
             'timer/isRunning': true,
             'timer/isPaused': false,
             'timer/startTime': Date.now(),
@@ -259,6 +348,7 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
             
           await update(gameRef, { 
             lockedOption: payload.optionIndex,
+            lockTrigger: Date.now(),
             'timer/isRunning': false,
             'timer/isPaused': true,
             'timer/remainingTime': remaining
@@ -326,12 +416,13 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
       }
       case 'ACTIVATE_VOTING':
         if (!gameState) return;
-        const votingDuration = 15000;
+        const votingDuration = 10000;
         await update(gameRef, {
           phase: 'CROWD_SOURCE',
           activeLifeline: null,
           removedOptions: null,
           crowdSourceVotes: { A: 0, B: 0, C: 0, D: 0 },
+          crowdSourceTrigger: Date.now(),
           savedRemainingTime: gameState.timer.remainingTime,
           savedDuration: gameState.timer.duration,
           savedPhase: gameState.phase,
@@ -495,6 +586,12 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
           revealCorrect: false,
           removedOptions: null,
           isTimeOut: false,
+          questionTrigger: null,
+          answerTrigger: null,
+          lockTrigger: null,
+          fffTimerTrigger: null,
+          crowdSourceTrigger: null,
+          fffWinnerTrigger: null,
           timer: {
             duration: 0,
             startTime: null,
@@ -900,7 +997,7 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
                 className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-lg text-sm font-bold shadow-lg shadow-blue-500/20 flex items-center justify-center space-x-2"
               >
                 <Users className="w-4 h-4" />
-                <span>ACTIVATE VOTING (15s)</span>
+                <span>ACTIVATE VOTING (10s)</span>
               </motion.button>
             )}
 
