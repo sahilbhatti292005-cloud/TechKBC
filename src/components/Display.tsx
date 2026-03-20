@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { GameState, Team, Role } from '../types';
 import { BarChart, Bar, XAxis, YAxis, Cell, ResponsiveContainer, Text } from 'recharts';
-import { Timer, Trophy, Users, Split, Phone } from 'lucide-react';
+import { Timer, Trophy, Users, Split, Phone, Play } from 'lucide-react';
 
 interface DisplayProps {
   gameState: GameState | null;
@@ -11,6 +11,7 @@ interface DisplayProps {
 
 const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
   const [timeLeft, setTimeLeft] = useState(0);
+  const [isAudioEnabled, setIsAudioEnabled] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const questionAudioRef = useRef<HTMLAudioElement | null>(null);
   const correctAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -347,6 +348,46 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
       <p className="text-gray-400 text-sm">The Admin needs to setup the game database.</p>
     </div>
   );
+
+  if (!isAudioEnabled && role === 'display') {
+    return (
+      <div className="min-h-screen bg-[#0a0a2a] flex flex-col items-center justify-center text-white space-y-8 p-6 text-center">
+        <div className="space-y-4">
+          <div className="w-24 h-24 bg-blue-600/20 rounded-full flex items-center justify-center mx-auto border-2 border-blue-500/50 animate-pulse">
+            <Users className="w-12 h-12 text-blue-400" />
+          </div>
+          <h1 className="text-4xl font-black uppercase tracking-widest text-blue-400">Digital Screen</h1>
+          <p className="text-gray-400 max-w-md mx-auto">
+            To ensure all game sounds play correctly, please click the button below to enable audio for this session.
+          </p>
+        </div>
+        <button 
+          onClick={() => {
+            // Unlock all audio elements for browser autoplay
+            const refs = [
+              audioRef, questionAudioRef, correctAudioRef, wrongAudioRef, 
+              lockAudioRef, fffTimerAudioRef, crowdSourceAudioRef, 
+              fffWinnerAudioRef, bellSmallAudioRef, bellLargeAudioRef
+            ];
+            refs.forEach(ref => {
+              if (ref.current) {
+                ref.current.play().then(() => {
+                  ref.current?.pause();
+                  ref.current!.currentTime = 0;
+                }).catch(() => {});
+              }
+            });
+            setIsAudioEnabled(true);
+          }}
+          className="bg-blue-600 hover:bg-blue-700 text-white px-12 py-6 rounded-3xl font-black text-2xl shadow-2xl shadow-blue-500/20 transition-all transform hover:scale-105 active:scale-95 flex items-center space-x-4"
+        >
+          <Play className="w-8 h-8" />
+          <span>START SESSION</span>
+        </button>
+        <p className="text-xs text-gray-500 uppercase tracking-widest">Browser interaction required for audio playback</p>
+      </div>
+    );
+  }
 
   return (
     <div className={`h-screen w-screen bg-[#0a0a2a] text-white p-12 font-sans overflow-hidden flex flex-col items-center relative ${gameState.phase === 'FFF_RESULT' ? 'justify-start pt-20' : 'justify-center'}`}>
