@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getDatabase } from "firebase/database";
+import { getDatabase, ref, onValue } from "firebase/database";
 
 const firebaseConfig = {
   apiKey: "AIzaSyA5Sb4fb93ABrCCn1MLsciUtkOzYFramjI",
@@ -14,3 +14,11 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 export const db = getDatabase(app);
+
+let serverTimeOffset = 0;
+const offsetRef = ref(db, ".info/serverTimeOffset");
+onValue(offsetRef, (snap) => {
+  serverTimeOffset = snap.val() || 0;
+});
+
+export const getServerTime = () => Date.now() + serverTimeOffset;

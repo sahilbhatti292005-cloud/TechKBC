@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { GameState } from '../types';
 import { CheckCircle, Clock, Vote, Lock } from 'lucide-react';
-import { db } from '../lib/firebase';
+import { db, getServerTime } from '../lib/firebase';
 import { ref, set, increment, update } from 'firebase/database';
 
 interface VolunteerProps {
@@ -44,7 +44,7 @@ const Volunteer: React.FC<VolunteerProps> = ({ gameState, teamId }) => {
   useEffect(() => {
     if (gameState?.timer.isRunning) {
       const interval = setInterval(() => {
-        const remaining = Math.max(0, (gameState.timer.endTime || 0) - Date.now());
+        const remaining = Math.max(0, (gameState.timer.endTime || 0) - getServerTime());
         setTimeLeft(Math.ceil(remaining / 1000));
         if (remaining === 0) clearInterval(interval);
       }, 100);
@@ -198,11 +198,21 @@ const Volunteer: React.FC<VolunteerProps> = ({ gameState, teamId }) => {
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="flex-1 flex flex-col"
           >
-            <div className="flex justify-between items-center mb-8">
-              <h2 className="text-2xl font-bold flex items-center"><Vote className="mr-3 text-blue-400" /> Crowd Source</h2>
-              <div className={`text-2xl font-mono font-bold ${timeLeft <= 5 ? 'text-red-500 animate-pulse' : 'text-blue-400'}`}>
+            <div className="flex justify-between items-center mb-4">
+              <div className="flex items-center space-x-2">
+                <Vote className="text-blue-400" />
+                <h2 className="text-xl font-bold uppercase tracking-wider text-blue-400">Crowd Source</h2>
+              </div>
+              <div className={`text-2xl font-mono font-bold px-4 py-1 rounded-lg bg-black/40 border ${timeLeft <= 5 ? 'text-red-500 border-red-500/50 animate-pulse' : 'text-blue-400 border-blue-500/30'}`}>
                 {timeLeft}s
               </div>
+            </div>
+
+            <div className="bg-blue-900/20 border border-blue-500/30 rounded-2xl p-6 mb-6">
+              <p className="text-xs text-blue-400 uppercase tracking-widest mb-2 font-bold">Question</p>
+              <h3 className="text-xl font-bold leading-tight">
+                {gameState.currentQuestion?.text || "Question loading..."}
+              </h3>
             </div>
             
             {teamId === gameState.hotSeatTeamId ? (
@@ -213,17 +223,24 @@ const Volunteer: React.FC<VolunteerProps> = ({ gameState, teamId }) => {
               </div>
             ) : timeLeft > 0 ? (
               !voted ? (
-                <div className="grid grid-cols-1 gap-4">
-                  {['A', 'B', 'C', 'D'].map((opt) => (
-                    <button 
-                      key={opt}
-                      onClick={() => handleVote(opt)}
-                      className="bg-[#1a1a4a] hover:bg-blue-600/20 p-6 rounded-2xl border border-white/10 text-left flex items-center space-x-4 transition-colors"
-                    >
-                      <span className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center font-black text-xl">{opt}</span>
-                      <span className="text-lg font-bold">Option {opt}</span>
-                    </button>
-                  ))}
+                <div className="grid grid-cols-1 gap-3">
+                  {['A', 'B', 'C', 'D'].map((opt, index) => {
+                    const optionText = gameState.currentQuestion?.options[index];
+                    const isRemoved = gameState.removedOptions?.includes(index);
+                    
+                    if (isRemoved) return null;
+
+                    return (
+                      <button 
+                        key={opt}
+                        onClick={() => handleVote(opt)}
+                        className="bg-[#1a1a4a] hover:bg-blue-600/40 p-4 rounded-xl border border-white/10 text-left flex items-center space-x-4 transition-all active:scale-[0.98] group"
+                      >
+                        <span className="w-10 h-10 bg-blue-600 group-hover:bg-blue-500 rounded-full flex items-center justify-center font-black text-lg shadow-lg shadow-blue-900/20">{opt}</span>
+                        <span className="text-lg font-medium flex-1">{optionText || `Option ${opt}`}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="flex-1 flex flex-col items-center justify-center text-center space-y-4">
@@ -251,6 +268,7 @@ const Volunteer: React.FC<VolunteerProps> = ({ gameState, teamId }) => {
             <div className="relative">
               <Lock className="w-20 h-20 text-blue-500/50" />
               <motion.div 
+                initial={{ rotate: 0 }}
                 animate={{ rotate: 360 }}
                 transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
                 className="absolute inset-0 border-2 border-dashed border-blue-500/30 rounded-full scale-150"

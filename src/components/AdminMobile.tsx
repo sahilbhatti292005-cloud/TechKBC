@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { GameState } from '../types';
 import { UserCheck, Trash2, AlertTriangle, Bell } from 'lucide-react';
-import { db } from '../lib/firebase';
+import { db, getServerTime } from '../lib/firebase';
 import { ref, update, remove } from 'firebase/database';
 
 interface AdminMobileProps {
@@ -59,21 +59,21 @@ const AdminMobile: React.FC<AdminMobileProps> = ({ gameState }) => {
           // Unlock and resume timer
           await update(gameRef, { 
             lockedOption: null,
-            lockTrigger: Date.now(),
+            lockTrigger: getServerTime(),
             'timer/isRunning': true,
             'timer/isPaused': false,
-            'timer/startTime': Date.now(),
-            'timer/endTime': Date.now() + (gameState.timer.remainingTime || 0)
+            'timer/startTime': getServerTime(),
+            'timer/endTime': getServerTime() + (gameState.timer.remainingTime || 0)
           });
         } else {
           // Lock and pause timer
           const remaining = gameState.timer.isRunning 
-            ? Math.max(0, (gameState.timer.endTime || 0) - Date.now()) 
+            ? Math.max(0, (gameState.timer.endTime || 0) - getServerTime()) 
             : gameState.timer.remainingTime;
             
           await update(gameRef, { 
             lockedOption: payload.optionIndex,
-            lockTrigger: Date.now(),
+            lockTrigger: getServerTime(),
             'timer/isRunning': false,
             'timer/isPaused': true,
             'timer/remainingTime': remaining
@@ -82,10 +82,10 @@ const AdminMobile: React.FC<AdminMobileProps> = ({ gameState }) => {
         break;
       }
       case 'BELL_SMALL':
-        await update(gameRef, { bellSmallTrigger: Date.now() });
+        await update(gameRef, { bellSmallTrigger: getServerTime() });
         break;
       case 'BELL_LARGE':
-        await update(gameRef, { bellLargeTrigger: Date.now() });
+        await update(gameRef, { bellLargeTrigger: getServerTime() });
         break;
       case 'UPDATE_SCORE':
         const team = gameState.teams.find(t => t.id === payload.teamId);

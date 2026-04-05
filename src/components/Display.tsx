@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { getServerTime } from '../lib/firebase';
 import { GameState, Team, Role } from '../types';
 import { BarChart, Bar, XAxis, YAxis, Cell, ResponsiveContainer, Text } from 'recharts';
 import { Timer, Trophy, Users, Split, Phone, Play } from 'lucide-react';
@@ -12,6 +13,8 @@ interface DisplayProps {
 const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
   const [timeLeft, setTimeLeft] = useState(0);
   const [isAudioEnabled, setIsAudioEnabled] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+  const [activeSound, setActiveSound] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const questionAudioRef = useRef<HTMLAudioElement | null>(null);
   const correctAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -22,6 +25,7 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
   const fffWinnerAudioRef = useRef<HTMLAudioElement | null>(null);
   const bellSmallAudioRef = useRef<HTMLAudioElement | null>(null);
   const bellLargeAudioRef = useRef<HTMLAudioElement | null>(null);
+  const timeoutAudioRef = useRef<HTMLAudioElement | null>(null);
   const lastTimerStartRef = useRef<number | null>(null);
   const lastQuestionTriggerRef = useRef<number | null>(null);
   const lastAnswerTriggerRef = useRef<number | null>(null);
@@ -31,7 +35,102 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
   const lastFffWinnerTriggerRef = useRef<number | null>(null);
   const lastBellSmallTriggerRef = useRef<number | null>(null);
   const lastBellLargeTriggerRef = useRef<number | null>(null);
+  const lastIsTimeOutRef = useRef<boolean>(false);
+  const lastIsTimerRunningRef = useRef<boolean>(false);
   const isFirstRender = useRef(true);
+  const wakeLockRef = useRef<any>(null);
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  const stopAllAudio = () => {
+    const refs = [
+      audioRef, questionAudioRef, correctAudioRef, wrongAudioRef, 
+      lockAudioRef, fffTimerAudioRef, crowdSourceAudioRef, 
+      fffWinnerAudioRef, bellSmallAudioRef, bellLargeAudioRef,
+      timeoutAudioRef
+    ];
+    refs.forEach(ref => {
+      if (ref.current) {
+        ref.current.pause();
+        ref.current.currentTime = 0;
+      }
+    });
+    currentAudioRef.current = null;
+    setActiveSound(null);
+  };
+
+  const playSound = (audio: HTMLAudioElement | null, loop: boolean = false) => {
+    if (!audio) return;
+    
+    // If another sound is already playing, stop it
+    if (currentAudioRef.current && currentAudioRef.current !== audio) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current.currentTime = 0;
+    }
+    
+    audio.loop = loop;
+    audio.onended = () => {
+      currentAudioRef.current = null;
+      setActiveSound(null);
+    };
+    
+    audio.play().catch(err => {
+      console.warn("Audio play failed:", err);
+      currentAudioRef.current = null;
+      setActiveSound(null);
+    });
+    currentAudioRef.current = audio;
+    setActiveSound(audio.src);
+  };
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  // Screen Wake Lock implementation
+  useEffect(() => {
+    if (role !== 'display') return;
+
+    const requestWakeLock = async () => {
+      try {
+        if ('wakeLock' in navigator) {
+          wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
+          
+          wakeLockRef.current.addEventListener('release', () => {
+            // Wake lock released
+          });
+        }
+      } catch (err: any) {
+        // Silently fail as per requirements
+      }
+    };
+
+    // Request wake lock when component mounts
+    requestWakeLock();
+
+    // Re-request wake lock when page becomes visible again
+    const handleVisibilityChange = () => {
+      if (wakeLockRef.current !== null && document.visibilityState === 'visible') {
+        requestWakeLock();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Minimal activity simulation to prevent throttling
+    const activityInterval = setInterval(() => {
+      // Just a no-op to keep the main thread slightly active
+      // This can help prevent some aggressive background throttling
+    }, 30000);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearInterval(activityInterval);
+      if (wakeLockRef.current) {
+        wakeLockRef.current.release();
+        wakeLockRef.current = null;
+      }
+    };
+  }, [role]);
 
   // Initialize audio once and handle cleanup
   useEffect(() => {
@@ -47,6 +146,7 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
     const fffWAudio = new Audio('/soundeffect/fffwinner.mp3');
     const bsAudio = new Audio('/soundeffect/fffwinner.mp3');
     const blAudio = new Audio('/soundeffect/kbclarge.mp3');
+    const tAudio = new Audio('/soundeffect/timeout.mp3');
     audioRef.current = audio;
     questionAudioRef.current = qAudio;
     correctAudioRef.current = cAudio;
@@ -57,6 +157,7 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
     fffWinnerAudioRef.current = fffWAudio;
     bellSmallAudioRef.current = bsAudio;
     bellLargeAudioRef.current = blAudio;
+    timeoutAudioRef.current = tAudio;
     
     return () => {
       audio.pause();
@@ -89,6 +190,9 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
       blAudio.pause();
       blAudio.src = "";
       bellLargeAudioRef.current = null;
+      tAudio.pause();
+      tAudio.src = "";
+      timeoutAudioRef.current = null;
     };
   }, [role]);
 
@@ -103,6 +207,8 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
       lastFffWinnerTriggerRef.current = gameState.fffWinnerTrigger || null;
       lastBellSmallTriggerRef.current = gameState.bellSmallTrigger || null;
       lastBellLargeTriggerRef.current = gameState.bellLargeTrigger || null;
+      lastIsTimeOutRef.current = gameState.isTimeOut || false;
+      lastIsTimerRunningRef.current = gameState.timer.isRunning || false;
       isFirstRender.current = false;
     }
   }, [gameState]);
@@ -115,14 +221,7 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
     if (!audio || !gameState?.questionTrigger) return;
 
     if (gameState.questionTrigger !== lastQuestionTriggerRef.current) {
-      // Interrupt lock audio
-      if (lockAudioRef.current) {
-        lockAudioRef.current.pause();
-        lockAudioRef.current.currentTime = 0;
-      }
-      audio.pause();
-      audio.currentTime = 0;
-      audio.play().catch(err => console.warn("Question audio play failed:", err));
+      playSound(audio);
       lastQuestionTriggerRef.current = gameState.questionTrigger;
     }
   }, [gameState?.questionTrigger, role]);
@@ -136,21 +235,10 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
     if (!correctAudio || !wrongAudio || !gameState?.answerTrigger || !gameState.currentQuestion) return;
 
     if (gameState.answerTrigger !== lastAnswerTriggerRef.current) {
-      // Interrupt lock audio
-      if (lockAudioRef.current) {
-        lockAudioRef.current.pause();
-        lockAudioRef.current.currentTime = 0;
-      }
-      // Stop both before playing
-      correctAudio.pause();
-      correctAudio.currentTime = 0;
-      wrongAudio.pause();
-      wrongAudio.currentTime = 0;
-
       const isCorrect = gameState.lockedOption === gameState.currentQuestion.correctIndex;
       const targetAudio = isCorrect ? correctAudio : wrongAudio;
 
-      targetAudio.play().catch(err => console.warn("Answer audio play failed:", err));
+      playSound(targetAudio);
       lastAnswerTriggerRef.current = gameState.answerTrigger;
     }
   }, [gameState?.answerTrigger, gameState?.lockedOption, gameState?.currentQuestion, role]);
@@ -163,9 +251,7 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
     if (!audio || !gameState?.lockTrigger) return;
 
     if (gameState.lockTrigger !== lastLockTriggerRef.current) {
-      audio.pause();
-      audio.currentTime = 0;
-      audio.play().catch(err => console.warn("Lock audio play failed:", err));
+      playSound(audio);
       lastLockTriggerRef.current = gameState.lockTrigger;
     }
   }, [gameState?.lockTrigger, role]);
@@ -178,9 +264,7 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
     if (!audio || !gameState?.fffTimerTrigger) return;
 
     if (gameState.fffTimerTrigger !== lastFffTimerTriggerRef.current) {
-      audio.pause();
-      audio.currentTime = 0;
-      audio.play().catch(err => console.warn("FFF Timer audio play failed:", err));
+      playSound(audio);
       lastFffTimerTriggerRef.current = gameState.fffTimerTrigger;
     }
   }, [gameState?.fffTimerTrigger, role]);
@@ -193,9 +277,7 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
     if (!audio || !gameState?.crowdSourceTrigger) return;
 
     if (gameState.crowdSourceTrigger !== lastCrowdSourceTriggerRef.current) {
-      audio.pause();
-      audio.currentTime = 0;
-      audio.play().catch(err => console.warn("Crowd Source audio play failed:", err));
+      playSound(audio);
       lastCrowdSourceTriggerRef.current = gameState.crowdSourceTrigger;
     }
   }, [gameState?.crowdSourceTrigger, role]);
@@ -208,9 +290,7 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
     if (!audio || !gameState?.fffWinnerTrigger) return;
 
     if (gameState.fffWinnerTrigger !== lastFffWinnerTriggerRef.current) {
-      audio.pause();
-      audio.currentTime = 0;
-      audio.play().catch(err => console.warn("FFF Winner audio play failed:", err));
+      playSound(audio);
       lastFffWinnerTriggerRef.current = gameState.fffWinnerTrigger;
     }
   }, [gameState?.fffWinnerTrigger, role]);
@@ -223,9 +303,7 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
     if (!audio || !gameState?.bellSmallTrigger) return;
 
     if (gameState.bellSmallTrigger !== lastBellSmallTriggerRef.current) {
-      audio.pause();
-      audio.currentTime = 0;
-      audio.play().catch(err => console.warn("Bell Small audio play failed:", err));
+      playSound(audio);
       lastBellSmallTriggerRef.current = gameState.bellSmallTrigger;
     }
   }, [gameState?.bellSmallTrigger, role]);
@@ -238,12 +316,23 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
     if (!audio || !gameState?.bellLargeTrigger) return;
 
     if (gameState.bellLargeTrigger !== lastBellLargeTriggerRef.current) {
-      audio.pause();
-      audio.currentTime = 0;
-      audio.play().catch(err => console.warn("Bell Large audio play failed:", err));
+      playSound(audio);
       lastBellLargeTriggerRef.current = gameState.bellLargeTrigger;
     }
   }, [gameState?.bellLargeTrigger, role]);
+
+  // Handle Timeout sound
+  useEffect(() => {
+    if (role !== 'display') return;
+
+    const audio = timeoutAudioRef.current;
+    if (!audio || !gameState) return;
+
+    if (gameState.isTimeOut && !lastIsTimeOutRef.current) {
+      playSound(audio);
+    }
+    lastIsTimeOutRef.current = gameState.isTimeOut;
+  }, [gameState?.isTimeOut, role]);
 
   // Handle lock audio interruption for other actions (Lifelines, Phase changes)
   useEffect(() => {
@@ -277,19 +366,19 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
     const isTimerFinished = timeLeft === 0 && !isTimerPaused;
 
     if (shouldBeActive && isTimerRunning && timeLeft > 0) {
-      // Check if this is a new timer session
-      if (gameState.timer.startTime !== lastTimerStartRef.current) {
-        audio.currentTime = 0;
+      // If timer is running but no sound is playing, or if it's a new session
+      const isTimerSoundPlaying = currentAudioRef.current === audio;
+      const isOtherSoundPlaying = currentAudioRef.current !== null && !isTimerSoundPlaying;
+      const newSession = gameState.timer.startTime !== lastTimerStartRef.current;
+
+      if (newSession) {
         lastTimerStartRef.current = gameState.timer.startTime;
+        playSound(audio, isCallDevPhase);
+      } else if (!isTimerSoundPlaying && !isOtherSoundPlaying) {
+        // Resume timer sound if it was interrupted and now nothing else is playing
+        playSound(audio, isCallDevPhase);
       }
       
-      // Set looping behavior
-      // Call Dev: loop full 60s. Hot Seat: no loop.
-      audio.loop = isCallDevPhase;
-      
-      // Play audio
-      audio.play().catch(err => console.warn("Audio play failed:", err));
-
       // Enforce duration limits for Hot Seat
       if (isHotSeatPhase) {
         let maxDuration = 60;
@@ -301,21 +390,30 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
             audio.pause();
             audio.currentTime = maxDuration;
             audio.removeEventListener('timeupdate', checkTime);
+            if (currentAudioRef.current === audio) currentAudioRef.current = null;
           }
         };
         audio.addEventListener('timeupdate', checkTime);
         return () => audio.removeEventListener('timeupdate', checkTime);
       }
     } else if (shouldBeActive && isTimerPaused && timeLeft > 0) {
-      audio.pause();
+      if (currentAudioRef.current === audio) {
+        audio.pause();
+        currentAudioRef.current = null;
+      }
     } else {
       // Stop and Reset
-      audio.pause();
-      audio.currentTime = 0;
+      if (currentAudioRef.current === audio) {
+        audio.pause();
+        audio.currentTime = 0;
+        currentAudioRef.current = null;
+      }
       if (!isTimerPaused) {
         lastTimerStartRef.current = null;
       }
     }
+
+    lastIsTimerRunningRef.current = isTimerRunning;
   }, [
     gameState?.timer.isRunning, 
     gameState?.timer.isPaused, 
@@ -323,15 +421,24 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
     gameState?.timer.type, 
     gameState?.phase, 
     gameState?.currentQuestion?.difficulty,
-    timeLeft
+    activeSound
   ]);
 
   useEffect(() => {
     if (gameState?.timer.isRunning) {
       const interval = setInterval(() => {
-        const remaining = Math.max(0, (gameState.timer.endTime || 0) - Date.now());
+        const remaining = Math.max(0, (gameState.timer.endTime || 0) - getServerTime());
         setTimeLeft(Math.ceil(remaining / 1000));
-        if (remaining === 0) clearInterval(interval);
+        if (remaining === 0) {
+          clearInterval(interval);
+          // Stop timer audio when it reaches 0
+          if (currentAudioRef.current === audioRef.current) {
+            audioRef.current?.pause();
+            if (audioRef.current) audioRef.current.currentTime = 0;
+            currentAudioRef.current = null;
+            setActiveSound(null);
+          }
+        }
       }, 100);
       return () => clearInterval(interval);
     } else if (gameState?.timer.isPaused) {
@@ -367,7 +474,8 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
             const refs = [
               audioRef, questionAudioRef, correctAudioRef, wrongAudioRef, 
               lockAudioRef, fffTimerAudioRef, crowdSourceAudioRef, 
-              fffWinnerAudioRef, bellSmallAudioRef, bellLargeAudioRef
+              fffWinnerAudioRef, bellSmallAudioRef, bellLargeAudioRef,
+              timeoutAudioRef
             ];
             refs.forEach(ref => {
               if (ref.current) {
@@ -390,7 +498,7 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
   }
 
   return (
-    <div className={`h-screen w-screen bg-[#0a0a2a] text-white p-12 font-sans overflow-hidden flex flex-col items-center relative ${gameState.phase === 'FFF_RESULT' ? 'justify-start pt-20' : 'justify-center'}`}>
+    <div className={`h-screen w-screen bg-[#0a0a2a] text-white p-[4vh] md:p-[5vh] font-sans overflow-hidden flex flex-col items-center relative ${gameState.phase === 'FFF_RESULT' ? 'justify-start pt-[8vh]' : 'justify-center'}`}>
       <AnimatePresence mode="wait">
         {gameState.isTimeOut ? (
           <motion.div
@@ -398,31 +506,31 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 1.2 }}
-            className="flex flex-col items-center justify-center space-y-4"
+            className="flex flex-col items-center justify-center space-y-[2vh]"
           >
-            <div className="text-[12rem] font-black text-red-600 tracking-tighter leading-none drop-shadow-[0_0_50px_rgba(220,38,38,0.5)]">
+            <div className="text-[min(20vw,25vh)] font-black text-red-600 tracking-tighter leading-none drop-shadow-[0_0_50px_rgba(220,38,38,0.5)]">
               TIME OUT
             </div>
-            <div className="h-2 w-64 bg-red-600 rounded-full animate-pulse" />
+            <div className="h-[1vh] w-[20vw] bg-red-600 rounded-full animate-pulse" />
           </motion.div>
         ) : !gameState.isTimeOut && gameState.phase === 'LOBBY' && (
           <motion.div 
             key="lobby"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="w-full h-full flex flex-col items-center justify-start space-y-6 pt-4 pb-48"
+            className="w-full h-full flex flex-col items-center justify-start space-y-[3vh] pt-[2vh] pb-[10vh]"
           >
-            <div className="text-center space-y-1">
-              <h1 className="text-3xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-600">
+            <div className="text-center space-y-[1vh]">
+              <h1 className="text-[clamp(1.5rem,5vw,4rem)] font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-600 uppercase">
                 COGNOTSAV TECH KBC
               </h1>
-              <div className="text-base font-mono text-blue-300 opacity-80 uppercase tracking-widest">Cycle {gameState.cycle} / 10</div>
+              <div className="text-[clamp(0.8rem,1.5vw,1.2rem)] font-mono text-blue-300 opacity-80 uppercase tracking-[0.2em]">Cycle {gameState.cycle} / 10</div>
             </div>
             
-            <div className="grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-3 w-full px-6 overflow-y-auto max-h-[calc(100vh-280px)] custom-scrollbar">
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(min(180px,30vw),1fr))] gap-[2vh] w-full max-w-[90vw] px-[2vw] overflow-y-auto max-h-[calc(100vh-30vh)] custom-scrollbar">
               {(gameState.teams || []).map((team, i) => (
-                <div key={team.id} className="bg-[#1a1a4a]/60 backdrop-blur-sm p-2 rounded-lg border border-white/10 text-center shadow-lg hover:border-blue-500/50 transition-colors">
-                  <div className="text-[8px] text-blue-400 font-bold tracking-widest mb-0.5 uppercase opacity-70">Team {i + 1}</div>
-                  <div className="text-sm font-bold truncate text-white">{team.name}</div>
+                <div key={team.id} className="bg-[#1a1a4a]/60 backdrop-blur-sm p-[2vh] rounded-xl border border-white/10 text-center shadow-lg hover:border-blue-500/50 transition-colors flex flex-col justify-center min-h-[10vh]">
+                  <div className="text-[clamp(0.6rem,1vw,0.8rem)] text-blue-400 font-bold tracking-widest mb-[0.5vh] uppercase opacity-70">Team {i + 1}</div>
+                  <div className="text-[clamp(0.9rem,1.8vw,1.4rem)] font-bold truncate text-white">{team.name}</div>
                 </div>
               ))}
             </div>
@@ -433,25 +541,25 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
           <motion.div 
             key="fff"
             initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
-            className="flex flex-col items-center justify-center w-full"
+            className="flex flex-col items-center justify-center w-full max-w-[90vw]"
           >
-            <div className="text-blue-400 text-sm uppercase tracking-widest mb-4">Fastest Finger First</div>
-            <h2 className="text-4xl font-bold text-center mb-12 max-w-4xl">{gameState.currentQuestion?.text}</h2>
+            <div className="text-blue-400 text-[clamp(0.8rem,1.5vw,1.2rem)] uppercase tracking-[0.3em] mb-[2vh]">Fastest Finger First</div>
+            <h2 className="text-[clamp(1.5rem,4vw,3.5rem)] font-bold text-center mb-[6vh] max-w-[80vw] leading-tight">{gameState.currentQuestion?.text}</h2>
             
             {gameState.phase === 'FFF_OPTIONS' && (
-              <div className="grid grid-cols-2 gap-6 w-full max-w-4xl">
+              <div className="grid grid-cols-2 gap-[3vh] w-full max-w-[85vw]">
                 {gameState.currentQuestion?.options.map((opt, i) => (
-                  <div key={i} className="bg-[#1a1a4a] p-6 rounded-2xl border-2 border-blue-500/30 flex items-center space-x-4">
-                    <span className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center font-bold">{String.fromCharCode(65 + i)}</span>
-                    <span className="text-xl">{opt}</span>
+                  <div key={i} className="bg-[#1a1a4a] p-[3vh] rounded-2xl border-2 border-blue-500/30 flex items-center space-x-[2vw]">
+                    <span className="w-[clamp(2.5rem,5vw,4rem)] h-[clamp(2.5rem,5vw,4rem)] bg-blue-600 rounded-full flex items-center justify-center font-bold text-[clamp(1rem,2vw,1.5rem)]">{String.fromCharCode(65 + i)}</span>
+                    <span className="text-[clamp(1.2rem,2.5vw,2rem)] leading-tight">{opt}</span>
                   </div>
                 ))}
               </div>
             )}
 
             {gameState.timer.type === 'FFF' && (
-              <div className="mt-12 relative w-32 h-32 flex items-center justify-center">
-                <svg className="w-full h-full -rotate-90">
+              <div className="mt-[6vh] relative w-[clamp(6rem,15vh,12rem)] h-[clamp(6rem,15vh,12rem)] flex items-center justify-center">
+                <svg className="w-full h-full -rotate-90" viewBox="0 0 128 128">
                   <circle 
                     cx="64" cy="64" r="60" 
                     fill="transparent" stroke="rgba(255,255,255,0.1)" strokeWidth="8" 
@@ -460,13 +568,14 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
                     cx="64" cy="64" r="60" 
                     fill="transparent" stroke={timeLeft <= 5 ? "#ef4444" : "#3b82f6"} strokeWidth="8" 
                     strokeDasharray="377"
+                    initial={{ strokeDashoffset: 377 }}
                     animate={{ 
                       strokeDashoffset: 377 - (377 * Math.min(1, Math.max(0, timeLeft / (gameState.timer.duration / 1000)))) 
                     }}
                     transition={{ duration: 1, ease: "linear" }}
                   />
                 </svg>
-                <div className={`absolute text-4xl font-mono font-bold ${timeLeft <= 5 ? 'text-red-500 animate-pulse' : ''}`}>
+                <div className={`absolute text-[clamp(2rem,5vh,4rem)] font-mono font-bold ${timeLeft <= 5 ? 'text-red-500 animate-pulse' : ''}`}>
                   {timeLeft}
                 </div>
               </div>
@@ -480,24 +589,24 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
             initial={{ opacity: 0, y: 20 }} 
             animate={{ opacity: 1, y: 0 }} 
             exit={{ opacity: 0, y: -20 }}
-            className="w-full max-w-[1200px] px-8 flex flex-col items-center"
+            className="w-full max-w-[95vw] px-[2vw] flex flex-col items-center"
           >
-            <h2 className="text-5xl font-black text-center mb-12 tracking-tight text-white">
+            <h2 className="text-[clamp(2rem,5vw,4rem)] font-black text-center mb-[4vh] tracking-tight text-white uppercase">
               Fastest Finger Results
             </h2>
             
-            <div className="w-full bg-[#15153a] rounded-2xl shadow-2xl overflow-hidden border border-white/5">
+            <div className="w-full bg-[#15153a] rounded-3xl shadow-2xl overflow-hidden border border-white/5">
               {/* Header */}
-              <div className="flex items-center h-[60px] px-[30px] bg-[#1e1e4a] text-blue-300 text-[11px] font-bold uppercase tracking-widest border-b border-white/5">
-                <div className="w-[80px] text-center">Rank</div>
-                <div className="flex-1 text-left ml-4">Team Name</div>
-                <div className="w-[140px] text-center">Time (s)</div>
-                <div className="w-[150px] text-center">Status</div>
-                <div className="w-[140px] text-right">Total Points</div>
+              <div className="flex items-center h-[8vh] px-[3vw] bg-[#1e1e4a] text-blue-300 text-[clamp(0.6rem,1.2vw,0.9rem)] font-bold uppercase tracking-widest border-b border-white/5">
+                <div className="w-[10%] text-center">Rank</div>
+                <div className="flex-1 text-left ml-[2vw]">Team Name</div>
+                <div className="w-[15%] text-center">Time (s)</div>
+                <div className="w-[15%] text-center">Status</div>
+                <div className="w-[15%] text-right">Total Points</div>
               </div>
 
               {/* Rows */}
-              <div className="divide-y divide-white/5">
+              <div className="divide-y divide-white/5 overflow-y-auto max-h-[55vh] custom-scrollbar">
                 {(gameState.teams || [])
                   .sort((a, b) => {
                     // First priority: Correctness (1 comes before 0)
@@ -512,33 +621,33 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
                   .map((team, i) => (
                     <div 
                       key={team.id} 
-                      className={`flex items-center h-[65px] px-[30px] transition-colors hover:bg-white/5 ${
+                      className={`flex items-center h-[9vh] px-[3vw] transition-colors hover:bg-white/5 ${
                         i % 2 === 0 ? 'bg-white/[0.02]' : 'bg-transparent'
                       }`}
                     >
-                      <div className="w-[80px] text-center font-mono text-gray-400">
+                      <div className="w-[10%] text-center font-mono text-gray-400 text-[clamp(1rem,2vw,1.5rem)]">
                         {i + 1}
                       </div>
-                      <div className="flex-1 text-left ml-4 font-bold text-lg truncate text-white">
+                      <div className="flex-1 text-left ml-[2vw] font-bold text-[clamp(1.1rem,2.2vw,1.8rem)] truncate text-white">
                         {team.name}
                       </div>
-                      <div className="w-[140px] text-center font-mono text-blue-400">
+                      <div className="w-[15%] text-center font-mono text-blue-400 text-[clamp(1rem,2vw,1.5rem)]">
                         {team.fffTime && isFinite(team.fffTime) && team.fffTime < 999999 
                           ? `${(team.fffTime / 1000).toFixed(3)}s` 
                           : "—"}
                       </div>
-                      <div className="w-[150px] flex justify-center">
+                      <div className="w-[15%] flex justify-center">
                         {team.isCorrect === 1 ? (
-                          <div className="bg-green-500/20 text-green-400 px-3 py-1 rounded-full text-xs font-bold flex items-center border border-green-500/30">
-                            <Trophy className="w-3 h-3 mr-1" /> Correct
+                          <div className="bg-green-500/20 text-green-400 px-[1.5vw] py-[0.5vh] rounded-full text-[clamp(0.7rem,1.2vw,0.9rem)] font-bold flex items-center border border-green-500/30">
+                            <Trophy className="w-[1.2vw] h-[1.2vw] mr-[0.5vw]" /> Correct
                           </div>
                         ) : (
-                          <div className="bg-red-500/20 text-red-400 px-3 py-1 rounded-full text-xs font-bold border border-red-500/30">
+                          <div className="bg-red-500/20 text-red-400 px-[1.5vw] py-[0.5vh] rounded-full text-[clamp(0.7rem,1.2vw,0.9rem)] font-bold border border-red-500/30">
                             Incorrect
                           </div>
                         )}
                       </div>
-                      <div className="w-[140px] text-right font-mono font-bold text-xl text-yellow-500">
+                      <div className="w-[15%] text-right font-mono font-bold text-[clamp(1.2rem,2.5vw,2rem)] text-yellow-500">
                         {40 + (team.hotSeatPoints || 0) + (team.bonusPoints || 0)}
                       </div>
                     </div>
@@ -552,59 +661,60 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
           <motion.div 
             key="hot_seat"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="flex flex-col items-center justify-center w-full"
+            className="flex flex-col items-center justify-center w-full max-w-[95vw]"
           >
-            <div className="flex items-center space-x-12 mb-12">
+            <div className="flex items-center space-x-[5vw] mb-[6vh]">
               <div className="text-center">
-                <div className="text-xs text-gray-400 uppercase">Current Team</div>
-                <div className="text-3xl font-bold text-blue-400">
+                <div className="text-[clamp(0.7rem,1.2vw,1rem)] text-gray-400 uppercase tracking-widest">Current Team</div>
+                <div className="text-[clamp(1.5rem,3.5vw,3rem)] font-bold text-blue-400 leading-tight">
                   {gameState.teams.find(t => t.id === gameState.hotSeatTeamId)?.name}
                 </div>
               </div>
 
               {gameState.timer.type === 'HOT_SEAT' && (
-                <div className="relative w-28 h-28 flex items-center justify-center">
-                  <svg className="w-full h-full -rotate-90">
+                <div className="relative w-[clamp(5rem,12vh,10rem)] h-[clamp(5rem,12vh,10rem)] flex items-center justify-center">
+                  <svg className="w-full h-full -rotate-90" viewBox="0 0 112 112">
                     <circle cx="56" cy="56" r="52" fill="transparent" stroke="rgba(255,255,255,0.1)" strokeWidth="4" />
                     <motion.circle 
                       cx="56" cy="56" r="52" fill="transparent" stroke={timeLeft <= 10 ? "#ef4444" : "#3b82f6"} strokeWidth="4" 
                       strokeDasharray="326"
+                      initial={{ strokeDashoffset: 326 }}
                       animate={{ 
                         strokeDashoffset: 326 - (326 * Math.min(1, Math.max(0, timeLeft / (gameState.timer.duration / 1000)))) 
                       }}
                       transition={{ duration: 1, ease: "linear" }}
                     />
                   </svg>
-                  <div className={`absolute text-3xl font-mono font-bold ${timeLeft <= 10 ? 'text-red-500 animate-pulse' : ''}`}>
+                  <div className={`absolute text-[clamp(1.5rem,4vh,3rem)] font-mono font-bold ${timeLeft <= 10 ? 'text-red-500 animate-pulse' : ''}`}>
                     {timeLeft}
                   </div>
                 </div>
               )}
 
               <div className="text-center">
-                <div className="text-xs text-gray-400 uppercase">Current Score</div>
-                <div className="text-3xl font-mono font-bold text-yellow-500">
+                <div className="text-[clamp(0.7rem,1.2vw,1rem)] text-gray-400 uppercase tracking-widest">Current Score</div>
+                <div className="text-[clamp(1.5rem,3.5vw,3rem)] font-mono font-bold text-yellow-500 leading-tight">
                   {40 + (gameState.teams.find(t => t.id === gameState.hotSeatTeamId)?.hotSeatPoints || 0) + (gameState.teams.find(t => t.id === gameState.hotSeatTeamId)?.bonusPoints || 0)}
                 </div>
               </div>
             </div>
 
-            <div className="bg-[#1a1a4a] p-12 rounded-3xl border-2 border-blue-500/30 w-full max-w-5xl relative">
+            <div className="bg-[#1a1a4a] p-[5vh] rounded-[3rem] border-2 border-blue-500/30 w-full max-w-[85vw] relative shadow-2xl">
               {gameState.phase === 'HOT_SEAT' ? (
-                <div className="text-center py-12">
-                  <h2 className="text-5xl font-black text-white mb-4 uppercase tracking-tighter">Congratulations!</h2>
-                  <p className="text-2xl text-blue-400 font-bold">
+                <div className="text-center py-[8vh]">
+                  <h2 className="text-[clamp(2.5rem,6vw,5rem)] font-black text-white mb-[2vh] uppercase tracking-tighter leading-none">Congratulations!</h2>
+                  <p className="text-[clamp(1.2rem,3vw,2.5rem)] text-blue-400 font-bold">
                     {gameState.teams.find(t => t.id === gameState.hotSeatTeamId)?.name} is in the Hot Seat!
                   </p>
                 </div>
               ) : (
                 <>
-                  <h2 className="text-4xl font-bold text-center mb-12">{gameState.currentQuestion?.text}</h2>
+                  <h2 className="text-[clamp(1.5rem,3.5vw,3rem)] font-bold text-center mb-[6vh] leading-tight">{gameState.currentQuestion?.text}</h2>
                   {gameState.phase !== 'HOT_SEAT_QUESTION' && (
-                    <div className="grid grid-cols-2 gap-6">
+                    <div className="grid grid-cols-2 gap-[3vh]">
                       {gameState.currentQuestion?.options.map((opt, i) => {
                         const isRemoved = gameState.removedOptions?.includes(i);
-                        if (isRemoved) return <div key={i} className="p-6 rounded-2xl border border-transparent opacity-0" />;
+                        if (isRemoved) return <div key={i} className="p-[3vh] rounded-2xl border border-transparent opacity-0" />;
                         
                         const isLocked = gameState.lockedOption === i;
                         const isCorrect = gameState.currentQuestion?.correctIndex === i;
@@ -633,12 +743,12 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
                         return (
                           <div 
                             key={i} 
-                            className={`p-6 rounded-2xl border transition-all flex items-center space-x-4 ${bgColor}`}
+                            className={`p-[3vh] rounded-2xl border transition-all flex items-center space-x-[2vw] ${bgColor}`}
                           >
-                            <span className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${iconColor}`}>
+                            <span className={`w-[clamp(2.5rem,5vw,4rem)] h-[clamp(2.5rem,5vw,4rem)] rounded-full flex items-center justify-center font-bold text-[clamp(1rem,2vw,1.5rem)] ${iconColor}`}>
                               {String.fromCharCode(65 + i)}
                             </span>
-                            <span className={`text-xl ${textColor}`}>{opt}</span>
+                            <span className={`text-[clamp(1.1rem,2.2vw,1.8rem)] leading-tight ${textColor}`}>{opt}</span>
                           </div>
                         );
                       })}
@@ -648,7 +758,7 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
               )}
             </div>
 
-            <div className="mt-12 flex space-x-8">
+            <div className="mt-[6vh] flex space-x-[4vw]">
               <LifelineIcon active={gameState.lifelines.debugHelp} label="Debug Help" cost="-20" />
               <LifelineIcon active={gameState.lifelines.callDev} label="Call Dev" cost="-10" />
               <LifelineIcon active={gameState.lifelines.crowdSource} label="Crowd Source" cost="-5" />
@@ -666,6 +776,7 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
           >
             <div className="p-20 bg-blue-600/10 rounded-full border-8 border-blue-500/50 shadow-[0_0_80px_rgba(59,130,246,0.3)] relative">
               <motion.div 
+                initial={{ rotate: 0 }}
                 animate={{ rotate: 360 }}
                 transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
                 className="absolute inset-0 border-4 border-dashed border-blue-400/20 rounded-full scale-110"
@@ -725,42 +836,44 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
               )}
             </div>
             
-            <div className="h-[400px] w-full bg-[#1a1a4a] p-8 rounded-3xl border border-white/10 relative overflow-hidden">
+            <div className="h-[min(50vh,400px)] w-full bg-[#1a1a4a] p-[3vh] rounded-[2rem] border border-white/10 relative overflow-hidden">
               {timeLeft > 0 && (
                 <div className="absolute inset-0 bg-[#0a0a2a]/40 backdrop-blur-sm z-10 flex items-center justify-center">
-                  <div className="text-center space-y-4">
-                    <div className="text-6xl font-black text-white tracking-widest animate-bounce">VOTING OPEN</div>
-                    <div className="text-blue-400 font-bold uppercase tracking-widest">Cast your votes now!</div>
+                  <div className="text-center space-y-[2vh]">
+                    <div className="text-[clamp(2.5rem,6vw,5rem)] font-black text-white tracking-widest animate-bounce">VOTING OPEN</div>
+                    <div className="text-blue-400 font-bold uppercase tracking-[0.3em] text-[clamp(0.8rem,1.5vw,1.2rem)]">Cast your votes now!</div>
                   </div>
                 </div>
               )}
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart 
-                  data={Object.entries(gameState.crowdSourceVotes).map(([name, value]) => {
-                    const total = Object.values(gameState.crowdSourceVotes).reduce((a, b) => (a as number) + (b as number), 0) as number;
-                    const percent = total === 0 ? 0 : ((value as number) / total) * 100;
-                    return { name, value: percent };
-                  })}
-                >
-                  <XAxis dataKey="name" stroke="#94a3b8" />
-                  <YAxis hide domain={[0, 100]} />
-                  <Bar dataKey="value" radius={[10, 10, 0, 0]} isAnimationActive={true}>
-                    {Object.entries(gameState.crowdSourceVotes).map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={index % 2 === 0 ? '#3b82f6' : '#8b5cf6'} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+              {isMounted && gameState.crowdSourceVotes && (
+                <ResponsiveContainer width="100%" height="100%" minHeight={100}>
+                  <BarChart 
+                    data={Object.entries(gameState.crowdSourceVotes).map(([name, value]) => {
+                      const total = Object.values(gameState.crowdSourceVotes).reduce((a, b) => (a as number) + (b as number), 0) as number;
+                      const percent = total === 0 ? 0 : ((value as number) / total) * 100;
+                      return { name, value: percent };
+                    })}
+                  >
+                    <XAxis dataKey="name" stroke="#94a3b8" />
+                    <YAxis hide domain={[0, 100]} />
+                    <Bar dataKey="value" radius={[10, 10, 0, 0]} isAnimationActive={true}>
+                      {Object.entries(gameState.crowdSourceVotes).map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={index % 2 === 0 ? '#3b82f6' : '#8b5cf6'} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </div>
             
-            <div className="grid grid-cols-4 gap-8 w-full mt-8">
+            <div className="grid grid-cols-4 gap-[2vw] w-full mt-[4vh]">
               {Object.entries(gameState.crowdSourceVotes).map(([name, value]) => {
                 const total = Object.values(gameState.crowdSourceVotes).reduce((a, b) => (a as number) + (b as number), 0) as number;
                 const percent = total === 0 ? 0 : Math.round(((value as number) / total) * 100);
                 return (
                   <div key={name} className="text-center">
-                    <div className="text-4xl font-black text-blue-400">{timeLeft > 0 ? '??' : `${percent}%`}</div>
-                    <div className="text-gray-400 uppercase tracking-widest text-sm">Option {name}</div>
+                    <div className="text-[clamp(1.5rem,3.5vw,3rem)] font-black text-blue-400">{timeLeft > 0 ? '??' : `${percent}%`}</div>
+                    <div className="text-gray-400 uppercase tracking-widest text-[clamp(0.6rem,1vw,0.8rem)]">Option {name}</div>
                   </div>
                 );
               })}
@@ -771,20 +884,20 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
 
       {/* Persistent Leaderboard at the bottom during certain states */}
       {!gameState.isTimeOut && ['LOBBY', 'GAME_OVER', 'FFF_RESULT', 'HOT_SEAT', 'HOT_SEAT_QUESTION', 'HOT_SEAT_OPTIONS'].includes(gameState.phase) && gameState.showBottomLeaderboard && (
-        <div className="fixed bottom-8 left-8 right-8">
-          <div className="bg-[#1a1a4a]/80 backdrop-blur-xl p-6 rounded-3xl border border-white/10">
-            <h3 className="text-xl font-bold mb-4 flex items-center"><Trophy className="mr-2 text-yellow-500" /> Live Leaderboard</h3>
-            <div className="grid grid-cols-5 gap-4">
+        <div className="fixed bottom-[4vh] left-[4vw] right-[4vw]">
+          <div className="bg-[#1a1a4a]/80 backdrop-blur-xl p-[3vh] rounded-[2rem] border border-white/10 shadow-2xl">
+            <h3 className="text-[clamp(1rem,2vw,1.5rem)] font-bold mb-[2vh] flex items-center uppercase tracking-widest"><Trophy className="mr-[1vw] text-yellow-500 w-[1.5vw] h-[1.5vw]" /> Live Leaderboard</h3>
+            <div className="grid grid-cols-5 gap-[1.5vw]">
               {(gameState.teams || [])
                 .sort((a, b) => (40 + ((b.hotSeatPoints as number) || 0) + ((b.bonusPoints as number) || 0)) - (40 + ((a.hotSeatPoints as number) || 0) + ((a.bonusPoints as number) || 0)))
                 .slice(0, 5)
                 .map((team, i) => (
-                  <div key={team.id} className="bg-[#0a0a2a] p-3 rounded-xl border border-white/5 flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      <span className="text-xs font-mono text-gray-500">#{i + 1}</span>
-                      <span className="font-bold truncate max-w-[150px]">{team.name}</span>
+                  <div key={team.id} className="bg-[#0a0a2a] p-[1.5vh] rounded-xl border border-white/5 flex items-center justify-between">
+                    <div className="flex items-center space-x-[1vw]">
+                      <span className="text-[clamp(0.6rem,1vw,0.8rem)] font-mono text-gray-500">#{i + 1}</span>
+                      <span className="font-bold truncate max-w-[10vw] text-[clamp(0.8rem,1.5vw,1.1rem)]">{team.name}</span>
                     </div>
-                    <span className="font-mono text-blue-400">{40 + ((team.hotSeatPoints as number) || 0) + ((team.bonusPoints as number) || 0)}</span>
+                    <span className="font-mono text-blue-400 text-[clamp(0.8rem,1.5vw,1.1rem)]">{40 + ((team.hotSeatPoints as number) || 0) + ((team.bonusPoints as number) || 0)}</span>
                   </div>
                 ))}
             </div>
@@ -797,10 +910,10 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
 
 const LifelineIcon: React.FC<{ active: boolean, label: string, cost: string }> = ({ active, label, cost }) => (
   <div className={`flex flex-col items-center transition-opacity ${active ? 'opacity-100' : 'opacity-20'}`}>
-    <div className={`w-16 h-16 rounded-full border-2 flex items-center justify-center mb-2 ${active ? 'border-blue-500 bg-blue-500/20' : 'border-white/20'}`}>
-      <span className="text-xs font-bold">{cost}</span>
+    <div className={`w-[clamp(3rem,8vh,6rem)] h-[clamp(3rem,8vh,6rem)] rounded-full border-2 flex items-center justify-center mb-[1vh] ${active ? 'border-blue-500 bg-blue-500/20' : 'border-white/20'}`}>
+      <span className="text-[clamp(0.7rem,1.5vw,1rem)] font-bold">{cost}</span>
     </div>
-    <span className="text-[10px] uppercase tracking-widest text-gray-400">{label}</span>
+    <span className="text-[clamp(0.5rem,1vw,0.7rem)] uppercase tracking-widest text-gray-400 text-center">{label}</span>
   </div>
 );
 

@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { GameState } from '../types';
 import { FFF_QUESTION_SETS, HOT_SEAT_QUESTIONS } from '../constants';
 import { Play, Eye, Lock, Trophy, UserCheck, RefreshCw, CheckCircle, XCircle, Zap, Pause, Square, Users, AlertTriangle, Split, Phone, Bell } from 'lucide-react';
-import { db } from '../lib/firebase';
+import { db, getServerTime } from '../lib/firebase';
 import { ref, update, set, remove } from 'firebase/database';
 
 interface AdminLaptopProps {
@@ -98,7 +98,7 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
   React.useEffect(() => {
     if (gameState?.timer.isRunning) {
       const interval = setInterval(() => {
-        const remaining = Math.max(0, (gameState.timer.endTime || 0) - Date.now());
+        const remaining = Math.max(0, (gameState.timer.endTime || 0) - getServerTime());
         setTimeLeft(Math.ceil(remaining / 1000));
         
         // Auto-end call timer
@@ -126,10 +126,10 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
 
     switch (action) {
       case 'BELL_SMALL':
-        await update(gameRef, { bellSmallTrigger: Date.now() });
+        await update(gameRef, { bellSmallTrigger: getServerTime() });
         break;
       case 'BELL_LARGE':
-        await update(gameRef, { bellLargeTrigger: Date.now() });
+        await update(gameRef, { bellLargeTrigger: getServerTime() });
         break;
       case 'START_FFF':
         if (!gameState) return;
@@ -143,7 +143,7 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
           revealCorrect: false,
           removedOptions: null,
           showBottomLeaderboard: true,
-          questionTrigger: Date.now(),
+          questionTrigger: getServerTime(),
           'timer/isRunning': false,
           'timer/isPaused': false,
           'timer/startTime': null,
@@ -189,10 +189,10 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
         const fffDuration = 15000;
         await update(gameRef, {
           phase: 'FFF_OPTIONS',
-          fffTimerTrigger: Date.now(),
+          fffTimerTrigger: getServerTime(),
           'timer/duration': fffDuration,
-          'timer/startTime': Date.now(),
-          'timer/endTime': Date.now() + fffDuration,
+          'timer/startTime': getServerTime(),
+          'timer/endTime': getServerTime() + fffDuration,
           'timer/remainingTime': fffDuration,
           'timer/isRunning': true,
           'timer/isPaused': false,
@@ -221,7 +221,7 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
         await update(gameRef, {
           phase: 'HOT_SEAT',
           hotSeatTeamId: payload.teamId,
-          fffWinnerTrigger: Date.now(),
+          fffWinnerTrigger: getServerTime(),
           showBottomLeaderboard: false,
           lifelines: { debugHelp: false, callDev: false, crowdSource: false },
           lockedOption: null,
@@ -246,7 +246,7 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
           removedOptions: null,
           savedRemainingTime: null,
           savedDuration: null,
-          questionTrigger: Date.now(),
+          questionTrigger: getServerTime(),
           'timer/isRunning': false,
           'timer/isPaused': false,
           'timer/startTime': null,
@@ -279,8 +279,8 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
         await update(gameRef, {
           phase: 'HOT_SEAT_OPTIONS',
           'timer/duration': hsDuration,
-          'timer/startTime': Date.now(),
-          'timer/endTime': Date.now() + hsDuration,
+          'timer/startTime': getServerTime(),
+          'timer/endTime': getServerTime() + hsDuration,
           'timer/remainingTime': hsDuration,
           'timer/isRunning': true,
           'timer/isPaused': false,
@@ -292,8 +292,8 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
         const duration = payload.duration || 30000;
         await update(gameRef, {
           'timer/duration': duration,
-          'timer/startTime': Date.now(),
-          'timer/endTime': Date.now() + duration,
+          'timer/startTime': getServerTime(),
+          'timer/endTime': getServerTime() + duration,
           'timer/remainingTime': duration,
           'timer/isRunning': true,
           'timer/isPaused': false,
@@ -302,7 +302,7 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
         break;
       case 'PAUSE_TIMER': {
         if (!gameState || !gameState.timer.isRunning) return;
-        const remaining = Math.max(0, (gameState.timer.endTime || 0) - Date.now());
+        const remaining = Math.max(0, (gameState.timer.endTime || 0) - getServerTime());
         await update(gameRef, {
           'timer/isRunning': false,
           'timer/isPaused': true,
@@ -316,8 +316,8 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
           activeLifeline: null,
           'timer/isRunning': true,
           'timer/isPaused': false,
-          'timer/startTime': Date.now(),
-          'timer/endTime': Date.now() + gameState.timer.remainingTime
+          'timer/startTime': getServerTime(),
+          'timer/endTime': getServerTime() + gameState.timer.remainingTime
         });
         break;
       case 'STOP_TIMER':
@@ -340,21 +340,21 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
           // Unlock and resume timer
           await update(gameRef, { 
             lockedOption: null,
-            lockTrigger: Date.now(),
+            lockTrigger: getServerTime(),
             'timer/isRunning': true,
             'timer/isPaused': false,
-            'timer/startTime': Date.now(),
-            'timer/endTime': Date.now() + (gameState.timer.remainingTime || 0)
+            'timer/startTime': getServerTime(),
+            'timer/endTime': getServerTime() + (gameState.timer.remainingTime || 0)
           });
         } else {
           // Lock and pause timer
           const remaining = gameState.timer.isRunning 
-            ? Math.max(0, (gameState.timer.endTime || 0) - Date.now()) 
+            ? Math.max(0, (gameState.timer.endTime || 0) - getServerTime()) 
             : gameState.timer.remainingTime;
             
           await update(gameRef, { 
             lockedOption: payload.optionIndex,
-            lockTrigger: Date.now(),
+            lockTrigger: getServerTime(),
             'timer/isRunning': false,
             'timer/isPaused': true,
             'timer/remainingTime': remaining
@@ -365,7 +365,7 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
       case 'REVEAL_CORRECT':
         await update(gameRef, {
           revealCorrect: true,
-          answerTrigger: Date.now(),
+          answerTrigger: getServerTime(),
           'timer/isRunning': false,
           'timer/isPaused': false,
           'timer/startTime': null,
@@ -394,8 +394,8 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
             activeLifeline: null,
             'timer/isRunning': true,
             'timer/isPaused': false,
-            'timer/startTime': Date.now(),
-            'timer/endTime': Date.now() + gameState.timer.remainingTime
+            'timer/startTime': getServerTime(),
+            'timer/endTime': getServerTime() + gameState.timer.remainingTime
           });
         } else {
           // Activate and pause
@@ -408,7 +408,7 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
             });
           }
 
-          const remaining = gameState.timer.isRunning ? Math.max(0, (gameState.timer.endTime || 0) - Date.now()) : gameState.timer.remainingTime;
+          const remaining = gameState.timer.isRunning ? Math.max(0, (gameState.timer.endTime || 0) - getServerTime()) : gameState.timer.remainingTime;
 
           await update(gameRef, {
             activeLifeline: lifeline,
@@ -428,13 +428,13 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
           activeLifeline: null,
           removedOptions: null,
           crowdSourceVotes: { A: 0, B: 0, C: 0, D: 0 },
-          crowdSourceTrigger: Date.now(),
+          crowdSourceTrigger: getServerTime(),
           savedRemainingTime: gameState.timer.remainingTime,
           savedDuration: gameState.timer.duration,
           savedPhase: gameState.phase,
           'timer/duration': votingDuration,
-          'timer/startTime': Date.now(),
-          'timer/endTime': Date.now() + votingDuration,
+          'timer/startTime': getServerTime(),
+          'timer/endTime': getServerTime() + votingDuration,
           'timer/remainingTime': votingDuration,
           'timer/isRunning': true,
           'timer/isPaused': false,
@@ -450,8 +450,8 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
           savedDuration: gameState.timer.duration,
           savedPhase: gameState.phase,
           'timer/duration': callDuration,
-          'timer/startTime': Date.now(),
-          'timer/endTime': Date.now() + callDuration,
+          'timer/startTime': getServerTime(),
+          'timer/endTime': getServerTime() + callDuration,
           'timer/remainingTime': callDuration,
           'timer/isRunning': true,
           'timer/isPaused': false,
@@ -468,8 +468,8 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
           activeLifeline: null,
           'timer/isRunning': true,
           'timer/isPaused': false,
-          'timer/startTime': Date.now(),
-          'timer/endTime': Date.now() + callRemaining,
+          'timer/startTime': getServerTime(),
+          'timer/endTime': getServerTime() + callRemaining,
           'timer/remainingTime': callRemaining,
           'timer/duration': callOriginalDuration,
           savedRemainingTime: null,
@@ -486,8 +486,8 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
           phase: originalPhase,
           'timer/isRunning': true,
           'timer/isPaused': false,
-          'timer/startTime': Date.now(),
-          'timer/endTime': Date.now() + remaining,
+          'timer/startTime': getServerTime(),
+          'timer/endTime': getServerTime() + remaining,
           'timer/remainingTime': remaining,
           'timer/duration': originalDuration,
           savedRemainingTime: null,
@@ -503,8 +503,8 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
         setQuestionIndices(prev => ({ ...prev, [diff]: newAltIndex }));
         setSelectedDifficulty(diff);
         
-        const questionIndex = ((gameState.cycle - 1) * 3 + newAltIndex) % HOT_SEAT_QUESTIONS[diff].length;
-        const newQuestion = HOT_SEAT_QUESTIONS[diff][questionIndex];
+        const altKey = newAltIndex === 0 ? 'main' : newAltIndex === 1 ? 'alt1' : 'alt2';
+        const newQuestion = HOT_SEAT_QUESTIONS[gameState.cycle][diff][altKey];
         const duration = diff === 'easy' ? 30000 : diff === 'medium' ? 45000 : 60000;
         
         await update(gameRef, {
@@ -541,8 +541,8 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
           removedOptions: removed,
           'timer/isRunning': true,
           'timer/isPaused': false,
-          'timer/startTime': Date.now(),
-          'timer/endTime': Date.now() + gameState.timer.remainingTime
+          'timer/startTime': getServerTime(),
+          'timer/endTime': getServerTime() + gameState.timer.remainingTime
         });
         break;
       }
@@ -553,7 +553,7 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
         if (newTimeOutState) {
           // Entering Time Out: Pause timer
           const remaining = gameState.timer.isRunning 
-            ? Math.max(0, (gameState.timer.endTime || 0) - Date.now()) 
+            ? Math.max(0, (gameState.timer.endTime || 0) - getServerTime()) 
             : gameState.timer.remainingTime;
             
           await update(gameRef, { 
@@ -568,8 +568,8 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
             isTimeOut: false,
             'timer/isRunning': true,
             'timer/isPaused': false,
-            'timer/startTime': Date.now(),
-            'timer/endTime': Date.now() + (gameState.timer.remainingTime || 0)
+            'timer/startTime': getServerTime(),
+            'timer/endTime': getServerTime() + (gameState.timer.remainingTime || 0)
           });
         }
         break;
@@ -669,7 +669,8 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
     );
   }
 
-  const currentHotSeatQuestion = HOT_SEAT_QUESTIONS[selectedDifficulty][((gameState.cycle - 1) * 3 + questionIndices[selectedDifficulty]) % HOT_SEAT_QUESTIONS[selectedDifficulty].length];
+  const altKey = questionIndices[selectedDifficulty] === 0 ? 'main' : questionIndices[selectedDifficulty] === 1 ? 'alt1' : 'alt2';
+  const currentHotSeatQuestion = HOT_SEAT_QUESTIONS[gameState.cycle][selectedDifficulty][altKey];
   const currentFFFQuestionSet = FFF_QUESTION_SETS[(gameState.cycle - 1) % FFF_QUESTION_SETS.length];
   const currentFFFQuestion = currentFFFQuestionSet.main;
 
@@ -868,9 +869,11 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
           </div>
           
           <div className="flex justify-between items-center mb-4">
-            <span className="text-xs text-gray-400">Question {questionIndices[selectedDifficulty] + 1}</span>
+            <span className="text-xs text-gray-400">
+              {questionIndices[selectedDifficulty] === 0 ? 'Main Question' : questionIndices[selectedDifficulty] === 1 ? '1st Alternate' : '2nd Alternate'}
+            </span>
             <button 
-              onClick={() => setQuestionIndices(prev => ({ ...prev, [selectedDifficulty]: (prev[selectedDifficulty] + 1) % HOT_SEAT_QUESTIONS[selectedDifficulty].length }))}
+              onClick={() => setQuestionIndices(prev => ({ ...prev, [selectedDifficulty]: (prev[selectedDifficulty] + 1) % 3 }))}
               className="text-xs text-blue-400 hover:underline"
             >
               Next Question
