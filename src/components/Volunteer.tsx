@@ -131,7 +131,7 @@ const Volunteer: React.FC<VolunteerProps> = ({ gameState, teamId }) => {
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
             className="flex-1 flex flex-col"
           >
-            <h2 className="text-xl font-bold mb-6">{gameState.currentQuestion?.text}</h2>
+            <h2 className="text-xl font-bold mb-6 whitespace-pre-wrap">{gameState.currentQuestion?.text}</h2>
             
             {gameState.phase === 'FFF_OPTIONS' && !submitted ? (
               <div className="flex-1 flex flex-col">
@@ -210,7 +210,7 @@ const Volunteer: React.FC<VolunteerProps> = ({ gameState, teamId }) => {
 
             <div className="bg-blue-900/20 border border-blue-500/30 rounded-2xl p-6 mb-6">
               <p className="text-xs text-blue-400 uppercase tracking-widest mb-2 font-bold">Question</p>
-              <h3 className="text-xl font-bold leading-tight">
+              <h3 className="text-xl font-bold leading-tight whitespace-pre-wrap">
                 {gameState.currentQuestion?.text || "Question loading..."}
               </h3>
             </div>

@@ -513,7 +513,7 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
             className="flex flex-col items-center justify-center w-full max-w-[90vw]"
           >
             <div className="text-blue-400 text-[clamp(0.8rem,1.5vw,1.2rem)] uppercase tracking-[0.3em] mb-[2vh]">Fastest Finger First</div>
-            <h2 className="text-[clamp(1.5rem,4vw,3.5rem)] font-bold text-center mb-[6vh] max-w-[80vw] leading-tight">{gameState.currentQuestion?.text}</h2>
+            <h2 className="text-[clamp(1.5rem,4vw,3.5rem)] font-bold text-center mb-[6vh] max-w-[80vw] leading-tight whitespace-pre-wrap">{gameState.currentQuestion?.text}</h2>
             
             {gameState.phase === 'FFF_OPTIONS' && (
               <div className="grid grid-cols-2 gap-[3vh] w-full max-w-[85vw]">
@@ -678,7 +678,7 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
                 </div>
               ) : (
                 <>
-                  <h2 className="text-[clamp(1.5rem,3.5vw,3rem)] font-bold text-center mb-[6vh] leading-tight">{gameState.currentQuestion?.text}</h2>
+                  <h2 className="text-[clamp(1.5rem,3.5vw,3rem)] font-bold text-center mb-[6vh] leading-tight whitespace-pre-wrap">{gameState.currentQuestion?.text}</h2>
                   {gameState.phase !== 'HOT_SEAT_QUESTION' && (
                     <div className="grid grid-cols-2 gap-[3vh]">
                       {gameState.currentQuestion?.options.map((opt, i) => {

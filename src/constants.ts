@@ -188,7 +188,7 @@ export const HOT_SEAT_QUESTIONS: Record<string, Question[]> = {
   ],
   medium: [
     // Cycle 1
-    { id: "m1_1", text: "What is the result of: int x = 0; printf(\"%d\", x++ + ++x);", options: ["1", "2", "Undefined behavior", "3"], correctIndex: 2, difficulty: 'medium' },
+    { id: "m1_1", text: "What is the result of:\nint x = 0;\nprintf(\"%d\", x++ + ++x);", options: ["1", "2", "4", "3"], correctIndex: 1, difficulty: 'medium' },
     { id: "m1_2", text: "Which of the following is NOT possible in a single-threaded program?", options: ["Deadlock", "Starvation", "Race condition", "Infinite loop"], correctIndex: 2, difficulty: 'medium' },
     { id: "m1_3", text: "Which of the following is NOT a valid IP address format?", options: ["192.168.1.1", "256.100.50.0", "10.0.0.1", "172.16.0.5"], correctIndex: 1, difficulty: 'medium' },
     // Cycle 2
@@ -242,7 +242,7 @@ export const HOT_SEAT_QUESTIONS: Record<string, Question[]> = {
     { id: "h3_2", text: "What does git stash do?", options: ["Deletes changes", "Saves changes temporarily without committing", "Uploads changes", "Merges branches"], correctIndex: 1, difficulty: 'hard' },
     { id: "h3_3", text: "Which of the following will cause deadlock?", options: ["Circular wait + mutual exclusion", "Mutual exclusion + no preemption + hold and wait + circular wait", "Only hold and wait", "Only circular wait"], correctIndex: 1, difficulty: 'hard' },
     // Cycle 4
-    { id: "h4_1", text: "What is the output of: printf(\"%d\", (10 > 5) ? (2 > 3 ? 1 : 2) : 3);", options: ["1", "2", "3", "Error"], correctIndex: 1, difficulty: 'hard' },
+    { id: "h4_1", text: "What is the output of:\nprintf(\"%d\", (10 > 5) ? (2 > 3 ? 1 : 2) : 3);", options: ["1", "2", "3", "Error"], correctIndex: 1, difficulty: 'hard' },
     { id: "h4_2", text: "What does J2EE stand for?", options: ["Java 2 Enterprise Edition", "Java 2 Entertainment Edition", "Java 2 Eight Edition", "Java 2 Eclispse Edition"], correctIndex: 0, difficulty: 'hard' },
     { id: "h4_3", text: "Which data structure is used to implement recursion internally?", options: ["Queue", "Stack", "Heap", "Graph"], correctIndex: 1, difficulty: 'hard' },
     // Cycle 5
