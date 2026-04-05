@@ -14,7 +14,6 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
   const [timeLeft, setTimeLeft] = useState(0);
   const [isAudioEnabled, setIsAudioEnabled] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
-  const [activeSound, setActiveSound] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const questionAudioRef = useRef<HTMLAudioElement | null>(null);
   const correctAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -36,51 +35,8 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
   const lastBellSmallTriggerRef = useRef<number | null>(null);
   const lastBellLargeTriggerRef = useRef<number | null>(null);
   const lastIsTimeOutRef = useRef<boolean>(false);
-  const lastIsTimerRunningRef = useRef<boolean>(false);
   const isFirstRender = useRef(true);
   const wakeLockRef = useRef<any>(null);
-  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
-
-  const stopAllAudio = () => {
-    const refs = [
-      audioRef, questionAudioRef, correctAudioRef, wrongAudioRef, 
-      lockAudioRef, fffTimerAudioRef, crowdSourceAudioRef, 
-      fffWinnerAudioRef, bellSmallAudioRef, bellLargeAudioRef,
-      timeoutAudioRef
-    ];
-    refs.forEach(ref => {
-      if (ref.current) {
-        ref.current.pause();
-        ref.current.currentTime = 0;
-      }
-    });
-    currentAudioRef.current = null;
-    setActiveSound(null);
-  };
-
-  const playSound = (audio: HTMLAudioElement | null, loop: boolean = false) => {
-    if (!audio) return;
-    
-    // If another sound is already playing, stop it
-    if (currentAudioRef.current && currentAudioRef.current !== audio) {
-      currentAudioRef.current.pause();
-      currentAudioRef.current.currentTime = 0;
-    }
-    
-    audio.loop = loop;
-    audio.onended = () => {
-      currentAudioRef.current = null;
-      setActiveSound(null);
-    };
-    
-    audio.play().catch(err => {
-      console.warn("Audio play failed:", err);
-      currentAudioRef.current = null;
-      setActiveSound(null);
-    });
-    currentAudioRef.current = audio;
-    setActiveSound(audio.src);
-  };
 
   useEffect(() => {
     setIsMounted(true);
@@ -208,7 +164,6 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
       lastBellSmallTriggerRef.current = gameState.bellSmallTrigger || null;
       lastBellLargeTriggerRef.current = gameState.bellLargeTrigger || null;
       lastIsTimeOutRef.current = gameState.isTimeOut || false;
-      lastIsTimerRunningRef.current = gameState.timer.isRunning || false;
       isFirstRender.current = false;
     }
   }, [gameState]);
@@ -221,7 +176,14 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
     if (!audio || !gameState?.questionTrigger) return;
 
     if (gameState.questionTrigger !== lastQuestionTriggerRef.current) {
-      playSound(audio);
+      // Interrupt lock audio
+      if (lockAudioRef.current) {
+        lockAudioRef.current.pause();
+        lockAudioRef.current.currentTime = 0;
+      }
+      audio.pause();
+      audio.currentTime = 0;
+      audio.play().catch(err => console.warn("Question audio play failed:", err));
       lastQuestionTriggerRef.current = gameState.questionTrigger;
     }
   }, [gameState?.questionTrigger, role]);
@@ -235,10 +197,21 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
     if (!correctAudio || !wrongAudio || !gameState?.answerTrigger || !gameState.currentQuestion) return;
 
     if (gameState.answerTrigger !== lastAnswerTriggerRef.current) {
+      // Interrupt lock audio
+      if (lockAudioRef.current) {
+        lockAudioRef.current.pause();
+        lockAudioRef.current.currentTime = 0;
+      }
+      // Stop both before playing
+      correctAudio.pause();
+      correctAudio.currentTime = 0;
+      wrongAudio.pause();
+      wrongAudio.currentTime = 0;
+
       const isCorrect = gameState.lockedOption === gameState.currentQuestion.correctIndex;
       const targetAudio = isCorrect ? correctAudio : wrongAudio;
 
-      playSound(targetAudio);
+      targetAudio.play().catch(err => console.warn("Answer audio play failed:", err));
       lastAnswerTriggerRef.current = gameState.answerTrigger;
     }
   }, [gameState?.answerTrigger, gameState?.lockedOption, gameState?.currentQuestion, role]);
@@ -251,7 +224,9 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
     if (!audio || !gameState?.lockTrigger) return;
 
     if (gameState.lockTrigger !== lastLockTriggerRef.current) {
-      playSound(audio);
+      audio.pause();
+      audio.currentTime = 0;
+      audio.play().catch(err => console.warn("Lock audio play failed:", err));
       lastLockTriggerRef.current = gameState.lockTrigger;
     }
   }, [gameState?.lockTrigger, role]);
@@ -264,7 +239,9 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
     if (!audio || !gameState?.fffTimerTrigger) return;
 
     if (gameState.fffTimerTrigger !== lastFffTimerTriggerRef.current) {
-      playSound(audio);
+      audio.pause();
+      audio.currentTime = 0;
+      audio.play().catch(err => console.warn("FFF Timer audio play failed:", err));
       lastFffTimerTriggerRef.current = gameState.fffTimerTrigger;
     }
   }, [gameState?.fffTimerTrigger, role]);
@@ -277,7 +254,9 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
     if (!audio || !gameState?.crowdSourceTrigger) return;
 
     if (gameState.crowdSourceTrigger !== lastCrowdSourceTriggerRef.current) {
-      playSound(audio);
+      audio.pause();
+      audio.currentTime = 0;
+      audio.play().catch(err => console.warn("Crowd Source audio play failed:", err));
       lastCrowdSourceTriggerRef.current = gameState.crowdSourceTrigger;
     }
   }, [gameState?.crowdSourceTrigger, role]);
@@ -290,7 +269,9 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
     if (!audio || !gameState?.fffWinnerTrigger) return;
 
     if (gameState.fffWinnerTrigger !== lastFffWinnerTriggerRef.current) {
-      playSound(audio);
+      audio.pause();
+      audio.currentTime = 0;
+      audio.play().catch(err => console.warn("FFF Winner audio play failed:", err));
       lastFffWinnerTriggerRef.current = gameState.fffWinnerTrigger;
     }
   }, [gameState?.fffWinnerTrigger, role]);
@@ -303,7 +284,9 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
     if (!audio || !gameState?.bellSmallTrigger) return;
 
     if (gameState.bellSmallTrigger !== lastBellSmallTriggerRef.current) {
-      playSound(audio);
+      audio.pause();
+      audio.currentTime = 0;
+      audio.play().catch(err => console.warn("Bell Small audio play failed:", err));
       lastBellSmallTriggerRef.current = gameState.bellSmallTrigger;
     }
   }, [gameState?.bellSmallTrigger, role]);
@@ -316,7 +299,9 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
     if (!audio || !gameState?.bellLargeTrigger) return;
 
     if (gameState.bellLargeTrigger !== lastBellLargeTriggerRef.current) {
-      playSound(audio);
+      audio.pause();
+      audio.currentTime = 0;
+      audio.play().catch(err => console.warn("Bell Large audio play failed:", err));
       lastBellLargeTriggerRef.current = gameState.bellLargeTrigger;
     }
   }, [gameState?.bellLargeTrigger, role]);
@@ -329,7 +314,9 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
     if (!audio || !gameState) return;
 
     if (gameState.isTimeOut && !lastIsTimeOutRef.current) {
-      playSound(audio);
+      audio.pause();
+      audio.currentTime = 0;
+      audio.play().catch(err => console.warn("Timeout audio play failed:", err));
     }
     lastIsTimeOutRef.current = gameState.isTimeOut;
   }, [gameState?.isTimeOut, role]);
@@ -366,19 +353,19 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
     const isTimerFinished = timeLeft === 0 && !isTimerPaused;
 
     if (shouldBeActive && isTimerRunning && timeLeft > 0) {
-      // If timer is running but no sound is playing, or if it's a new session
-      const isTimerSoundPlaying = currentAudioRef.current === audio;
-      const isOtherSoundPlaying = currentAudioRef.current !== null && !isTimerSoundPlaying;
-      const newSession = gameState.timer.startTime !== lastTimerStartRef.current;
-
-      if (newSession) {
+      // Check if this is a new timer session
+      if (gameState.timer.startTime !== lastTimerStartRef.current) {
+        audio.currentTime = 0;
         lastTimerStartRef.current = gameState.timer.startTime;
-        playSound(audio, isCallDevPhase);
-      } else if (!isTimerSoundPlaying && !isOtherSoundPlaying) {
-        // Resume timer sound if it was interrupted and now nothing else is playing
-        playSound(audio, isCallDevPhase);
       }
       
+      // Set looping behavior
+      // Call Dev: loop full 60s. Hot Seat: no loop.
+      audio.loop = isCallDevPhase;
+      
+      // Play audio
+      audio.play().catch(err => console.warn("Audio play failed:", err));
+
       // Enforce duration limits for Hot Seat
       if (isHotSeatPhase) {
         let maxDuration = 60;
@@ -390,30 +377,21 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
             audio.pause();
             audio.currentTime = maxDuration;
             audio.removeEventListener('timeupdate', checkTime);
-            if (currentAudioRef.current === audio) currentAudioRef.current = null;
           }
         };
         audio.addEventListener('timeupdate', checkTime);
         return () => audio.removeEventListener('timeupdate', checkTime);
       }
     } else if (shouldBeActive && isTimerPaused && timeLeft > 0) {
-      if (currentAudioRef.current === audio) {
-        audio.pause();
-        currentAudioRef.current = null;
-      }
+      audio.pause();
     } else {
       // Stop and Reset
-      if (currentAudioRef.current === audio) {
-        audio.pause();
-        audio.currentTime = 0;
-        currentAudioRef.current = null;
-      }
+      audio.pause();
+      audio.currentTime = 0;
       if (!isTimerPaused) {
         lastTimerStartRef.current = null;
       }
     }
-
-    lastIsTimerRunningRef.current = isTimerRunning;
   }, [
     gameState?.timer.isRunning, 
     gameState?.timer.isPaused, 
@@ -421,7 +399,7 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
     gameState?.timer.type, 
     gameState?.phase, 
     gameState?.currentQuestion?.difficulty,
-    activeSound
+    timeLeft
   ]);
 
   useEffect(() => {
@@ -429,16 +407,7 @@ const Display: React.FC<DisplayProps> = ({ gameState, role }) => {
       const interval = setInterval(() => {
         const remaining = Math.max(0, (gameState.timer.endTime || 0) - getServerTime());
         setTimeLeft(Math.ceil(remaining / 1000));
-        if (remaining === 0) {
-          clearInterval(interval);
-          // Stop timer audio when it reaches 0
-          if (currentAudioRef.current === audioRef.current) {
-            audioRef.current?.pause();
-            if (audioRef.current) audioRef.current.currentTime = 0;
-            currentAudioRef.current = null;
-            setActiveSound(null);
-          }
-        }
+        if (remaining === 0) clearInterval(interval);
       }, 100);
       return () => clearInterval(interval);
     } else if (gameState?.timer.isPaused) {

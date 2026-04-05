@@ -503,8 +503,8 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
         setQuestionIndices(prev => ({ ...prev, [diff]: newAltIndex }));
         setSelectedDifficulty(diff);
         
-        const altKey = newAltIndex === 0 ? 'main' : newAltIndex === 1 ? 'alt1' : 'alt2';
-        const newQuestion = HOT_SEAT_QUESTIONS[gameState.cycle][diff][altKey];
+        const questionIndex = ((gameState.cycle - 1) * 3 + newAltIndex) % HOT_SEAT_QUESTIONS[diff].length;
+        const newQuestion = HOT_SEAT_QUESTIONS[diff][questionIndex];
         const duration = diff === 'easy' ? 30000 : diff === 'medium' ? 45000 : 60000;
         
         await update(gameRef, {
@@ -669,8 +669,7 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
     );
   }
 
-  const altKey = questionIndices[selectedDifficulty] === 0 ? 'main' : questionIndices[selectedDifficulty] === 1 ? 'alt1' : 'alt2';
-  const currentHotSeatQuestion = HOT_SEAT_QUESTIONS[gameState.cycle][selectedDifficulty][altKey];
+  const currentHotSeatQuestion = HOT_SEAT_QUESTIONS[selectedDifficulty][((gameState.cycle - 1) * 3 + questionIndices[selectedDifficulty]) % HOT_SEAT_QUESTIONS[selectedDifficulty].length];
   const currentFFFQuestionSet = FFF_QUESTION_SETS[(gameState.cycle - 1) % FFF_QUESTION_SETS.length];
   const currentFFFQuestion = currentFFFQuestionSet.main;
 
@@ -869,11 +868,9 @@ const AdminLaptop: React.FC<AdminLaptopProps> = ({ gameState }) => {
           </div>
           
           <div className="flex justify-between items-center mb-4">
-            <span className="text-xs text-gray-400">
-              {questionIndices[selectedDifficulty] === 0 ? 'Main Question' : questionIndices[selectedDifficulty] === 1 ? '1st Alternate' : '2nd Alternate'}
-            </span>
+            <span className="text-xs text-gray-400">Question {questionIndices[selectedDifficulty] + 1}</span>
             <button 
-              onClick={() => setQuestionIndices(prev => ({ ...prev, [selectedDifficulty]: (prev[selectedDifficulty] + 1) % 3 }))}
+              onClick={() => setQuestionIndices(prev => ({ ...prev, [selectedDifficulty]: (prev[selectedDifficulty] + 1) % HOT_SEAT_QUESTIONS[selectedDifficulty].length }))}
               className="text-xs text-blue-400 hover:underline"
             >
               Next Question
