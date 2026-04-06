@@ -11,7 +11,7 @@ export const FFF_QUESTION_SETS: FFFQuestionSet[] = [
     alternate: {
       id: "fff1_alt",
       text: "Put the following stages of human life in chronological order from youngest to oldest.",
-      options: ["Adult", "Child", "Infant", "Teenager"],
+      options: ["Adult", "Child", "Baby", "Teenager"],
       correctOrder: [2, 1, 3, 0]
     }
   },
@@ -89,7 +89,7 @@ export const FFF_QUESTION_SETS: FFFQuestionSet[] = [
     main: {
       id: "fff7",
       text: "Identify the correct order of these numbers as they appear on the number line from smallest to largest.",
-      options: ["-7", "3", "-2", "5"],
+      options: ["-9", "5", "-3", "7"],
       correctOrder: [0, 2, 1, 3]
     },
     alternate: {
@@ -146,12 +146,12 @@ export const FFF_QUESTION_SETS: FFFQuestionSet[] = [
 export const HOT_SEAT_QUESTIONS: Record<string, Question[]> = {
   easy: [
     // Cycle 1
-    { id: "e1_1", text: "Which of the following is NOT possible in a single-threaded program?", options: ["Deadlock", "Starvation", "Race condition", "Infinite loop"], correctIndex: 2, difficulty: 'easy' },
+    { id: "e1_1", text: "How many bits are required to represent decimal number 255?", options: ["7", "8", "9", "16"], correctIndex: 1, difficulty: 'easy' },
     { id: "e1_2", text: "Which of the following is NOT a property of ACID in databases?", options: ["Atomicity", "Consistency", "Isolation", "Duplication"], correctIndex: 3, difficulty: 'easy' },
     { id: "e1_3", text: "What will happen if you divide an integer by zero in most programming languages?", options: ["Returns 0", "Returns infinity", "Runtime error", "Compiles successfully and runs"], correctIndex: 2, difficulty: 'easy' },
     // Cycle 2
-    { id: "e2_1", text: "Which of the following is NOT a characteristic of a deadlock?", options: ["Mutual exclusion", "Hold and wait", "Preemption", "Circular wait"], correctIndex: 2, difficulty: 'easy' },
-    { id: "e2_2", text: "What is the primary purpose of normalization in databases?", options: ["Increase redundancy", "Improve UI", "Reduce data redundancy", "Speed up CPU"], correctIndex: 2, difficulty: 'easy' },
+    { id: "e2_1", text: "What is the primary purpose of normalization in databases?", options: ["Increase redundancy", "Improve UI", "Reduce data redundancy", "Speed up CPU"], correctIndex: 2, difficulty: 'easy' },
+    { id: "e2_2", text: "Which of the following is NOT a characteristic of a deadlock?", options: ["Mutual exclusion", "Hold and wait", "Preemption", "Circular wait"], correctIndex: 2, difficulty: 'easy' },
     { id: "e2_3", text: "Which of the following operations has the highest priority in most programming languages?", options: ["Addition (+)", "Multiplication (*)", "Division (/)", "Parentheses ()"], correctIndex: 3, difficulty: 'easy' },
     // Cycle 3
     { id: "e3_1", text: "Which normal form eliminates transitive dependency?", options: ["1NF", "2NF", "3NF", "4NF"], correctIndex: 2, difficulty: 'easy' },
@@ -200,7 +200,7 @@ export const HOT_SEAT_QUESTIONS: Record<string, Question[]> = {
     { id: "m3_2", text: "Which of the following is NOT true about threads?", options: ["Threads share memory", "Threads are lightweight", "Threads have separate address space", "Threads improve performance"], correctIndex: 2, difficulty: 'medium' },
     { id: "m3_3", text: "What is the output of: printf(\"%d\", sizeof('A'));", options: ["1", "2", "4", "Depends on compiler"], correctIndex: 2, difficulty: 'medium' },
     // Cycle 4
-    { id: "m4_1", text: "How many bits are required to represent decimal number 255?", options: ["7", "8", "9", "16"], correctIndex: 1, difficulty: 'medium' },
+    { id: "m4_1", text: "Which of the following is NOT possible in a single-threaded program?", options: ["Deadlock", "Starvation", "Race condition", "Infinite loop"], correctIndex: 2, difficulty: 'medium' },
     { id: "m4_2", text: "Which of the following best describes a race condition fix?", options: ["Increase CPU speed", "Use synchronization mechanisms", "Add more threads", "Use recursion"], correctIndex: 1, difficulty: 'medium' },
     { id: "m4_3", text: "Which of the following scheduling algorithms gives minimum average waiting time?", options: ["FCFS", "Round Robin", "Shortest Job First", "Priority Scheduling"], correctIndex: 2, difficulty: 'medium' },
     // Cycle 5
@@ -208,8 +208,8 @@ export const HOT_SEAT_QUESTIONS: Record<string, Question[]> = {
     { id: "m5_2", text: "What is the worst-case time complexity of Quick Sort?", options: ["O(n log n)", "O(log n)", "O(n²)", "O(n)"], correctIndex: 2, difficulty: 'medium' },
     { id: "m5_3", text: "Which data structure is used to implement recursion internally?", options: ["Queue", "Stack", "Heap", "Graph"], correctIndex: 1, difficulty: 'medium' },
     // Cycle 6
-    { id: "m6_1", text: "What is the space complexity of Merge Sort?", options: ["O(1)", "O(log n)", "O(n)", "O(n log n)"], correctIndex: 2, difficulty: 'medium' },
-    { id: "m6_2", text: "Which is correct?", options: ["Empty set = {0}", "Empty set ⊂ {0}", "Empty set ∈ {0}", "Empty set = ∅ = {∅}"], correctIndex: 1, difficulty: 'medium' },
+    { id: "m6_1", text: "Which is correct?", options: ["Empty set = {0}", "Empty set ⊂ {0}", "Empty set ∈ {0}", "Empty set = ∅ = {∅}"], correctIndex: 1, difficulty: 'medium' },
+    { id: "m6_2", text: "What is the space complexity of Merge Sort?", options: ["O(1)", "O(log n)", "O(n)", "O(n log n)"], correctIndex: 2, difficulty: 'medium' },
     { id: "m6_3", text: "Which of the following is TRUE about normalization in databases?", options: ["It increases redundancy", "It removes anomalies", "It slows down queries always", "It duplicates data"], correctIndex: 1, difficulty: 'medium' },
     // Cycle 7
     { id: "m7_1", text: "Which data structure is used for implementing graphs?", options: ["Array only", "Linked List only", "Adjacency List / Matrix", "Stack"], correctIndex: 2, difficulty: 'medium' },
